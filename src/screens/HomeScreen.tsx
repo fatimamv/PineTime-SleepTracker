@@ -2,9 +2,15 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Alert, PermissionsAndroid, Platform, TouchableOpacity, Modal, Button, TextInput } from 'react-native';
 import { ScreenComponent } from './types';
 import { checkConnection, startDataCollection } from '../utils/BluetoothManager';
-import { createSleepRecord } from '../utils/BluetoothManager'; // ajusta el path si lo mueves
+import { createSleepRecord } from '../utils/BluetoothManager'; 
 import { supabase } from '../api/supabaseClient';
+console.log('👀 Supabase URL:', supabase);
 import { Picker } from '@react-native-picker/picker';
+import { useBluetooth } from '../context/BluetoothContext';
+import { useRef } from 'react';
+import { Subscription } from 'react-native-ble-plx'; 
+import { useConfig } from '../context/ConfigContext';
+
 
 interface User {
   id: number;
@@ -20,6 +26,13 @@ const HomeScreen: ScreenComponent = () => {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isNewUser, setIsNewUser] = useState(false);
   const [newUserName, setNewUserName] = useState('');
+  const { connectedDevice, setConnectedDevice } = useBluetooth();
+  const collectionSubscriptions = useRef<{ accel: Subscription | null; hr: Subscription | null }>({
+    accel: null,
+    hr: null,
+  });
+  const cleanupRef = useRef<(() => void) | null>(null);
+  
 
   const requestPermissions = async () => {
     if (Platform.OS === 'android') {
@@ -60,17 +73,8 @@ const HomeScreen: ScreenComponent = () => {
   }, []);
 
   useEffect(() => {
-    const checkDeviceConnection = async () => {
-      const connected = await checkConnection();
-      setIsConnected(connected);
-    };
-
-    checkDeviceConnection();
-    // Check connection status every 5 seconds
-    const interval = setInterval(checkDeviceConnection, 5000);
-
-    return () => clearInterval(interval);
-  }, []);
+    setIsConnected(connectedDevice !== null);
+  }, [connectedDevice]);
   
   useEffect(() => {
     const fetchUsers = async () => {
@@ -81,19 +85,46 @@ const HomeScreen: ScreenComponent = () => {
     fetchUsers();
   }, []);
 
+  useEffect(() => {
+    const testConnection = async () => {
+      try {
+        const { data, error } = await supabase.from('users').select('*').limit(1);
+  
+        if (error) {
+          console.error('❌ Connection failed:', error.message);
+          Alert.alert('Supabase error', error.message);
+        } else {
+          console.log('✅ Supabase connected, first user:', data);
+          Alert.alert('Success', 'Connection to Supabase is working');
+        }
+      } catch (err: any) {
+        console.error('💥 Exception:', err.message);
+        Alert.alert('Exception', err.message);
+      }
+    };
+  
+    testConnection();
+  }, []);
+
+  const { accelFrequency, hrFrequency } = useConfig();
+  const accelFreqMs = accelFrequency * 1000;
+  const hrFreqMs = hrFrequency * 1000;
+
   const handleStartCollection = async () => {
     if (!isConnected) return;
     
     setIsCollecting(true);
 
     const sleepRecordId = await createSleepRecord(1); // usa el ID real del usuario
-    if (!sleepRecordId) {
-      Alert.alert('Error', 'No se pudo crear el registro de sueño.');
+    if (!sleepRecordId || !connectedDevice) {
+      Alert.alert('Error', 'Sleep record not created or device not connected.');
       setIsCollecting(false);
       return;
     }
   
-    const success = await startDataCollection(sleepRecordId);
+    const success = await startDataCollection(connectedDevice, sleepRecordId, accelFreqMs, hrFreqMs, (accelSub, hrSub) => {
+      collectionSubscriptions.current = { accel: accelSub, hr: hrSub };
+    });
     
     if (!success) {
       Alert.alert(
@@ -106,10 +137,48 @@ const HomeScreen: ScreenComponent = () => {
   };
 
   const startExtractionWithUser = async (userId: number) => {
-    const sleepRecordId = await createSleepRecord(userId); // Aquí se usa el ID del usuario
-    if (!sleepRecordId) return;
-    await startDataCollection(sleepRecordId);
-  };  
+    console.log('⏳ Creating sleep record...');
+    const sleepRecordId = await createSleepRecord(userId);
+    console.log('🚀 Calling startDataCollection with ID:', sleepRecordId);
+    
+    if (!sleepRecordId) {
+      console.error('❌ No sleep record ID created');
+      return;
+    }
+    
+    if (!connectedDevice) {
+      console.error('❌ No connected device');
+      return;
+    }
+
+    console.log('📱 Starting data collection with device:', connectedDevice.name);
+    try {
+      const startedCleanup = await startDataCollection(connectedDevice, sleepRecordId, accelFreqMs, hrFreqMs, (accelSub, hrSub) => {
+        collectionSubscriptions.current = { accel: accelSub, hr: hrSub };
+      });
+      
+      if (startedCleanup) {
+        cleanupRef.current?.(); // Limpia suscripciones anteriores si había
+        cleanupRef.current = startedCleanup; // Guarda la nueva cleanup
+        setIsCollecting(true);
+        console.log('✅ Extraction started successfully');
+      } else {
+        console.error('❌ Failed to start extraction');
+      }      
+    } catch (error) {
+      console.error('💥 Error in startDataCollection:', error);
+    }
+  };
+
+  const stopDataCollection = () => {
+    console.log('🛑 Stopping data collection...');
+    collectionSubscriptions.current.accel?.remove();
+    collectionSubscriptions.current.hr?.remove();
+    cleanupRef.current?.(); // Esto corta el keep-alive y monitoreo BLE
+    collectionSubscriptions.current = { accel: null, hr: null };
+    cleanupRef.current = null;
+    setIsCollecting(false);
+  };
 
   return (
     <View style={styles.container}>
@@ -120,23 +189,25 @@ const HomeScreen: ScreenComponent = () => {
             {isConnected ? 'Connected to PineTime' : 'PineTime device not connected'}
           </Text>
         </View>
-        <TouchableOpacity
-          style={[
-            styles.button,
-            (!isConnected || isCollecting) && styles.buttonDisabled
-          ]}
-          onPress={handleStartCollection}
-          disabled={!isConnected || isCollecting}
-        >
-          <Text style={styles.buttonText}>
-            {isCollecting ? 'Collecting Data...' : 'Start New Extraction'}
-          </Text>
-        </TouchableOpacity>
       </View>
       
-      <TouchableOpacity onPress={() => setIsModalVisible(true)}>
-        <Text>Start extracting data</Text>
+      <View style={styles.bottomButtonContainer}>
+      <TouchableOpacity
+        style={[styles.button, !isConnected && styles.buttonDisabled]}
+        onPress={async () => {
+          if (isCollecting) {
+            stopDataCollection();
+          } else {
+            setIsModalVisible(true);
+          }
+        }}
+        disabled={!isConnected}
+      >
+        <Text style={styles.buttonText}>
+          {isCollecting ? 'Stop Data Collection' : 'Start Data Collection'}
+        </Text>
       </TouchableOpacity>
+      </View>
 
       <Modal
         animationType="slide"
@@ -144,66 +215,77 @@ const HomeScreen: ScreenComponent = () => {
         visible={isModalVisible}
       >
         <View style={styles.modalContainer}>
-          {users.length === 0 ? (
-            <Text>No users found. Please create a new user.</Text>
-          ) : (
-            <Picker
-              selectedValue={selectedUser}
-              onValueChange={(value: string) => setSelectedUser(value)}
-            >
-              {users.map((u: User) => (
-                <Picker.Item key={u.id} label={u.name} value={u.name} />
-              ))}
-              <Picker.Item label="Add new user..." value="new" />
-            </Picker>
-          )}
-          
-          <Text>Select or enter name</Text>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>
+              Insert the <Text style={{ fontWeight: 'bold' }}>name</Text> of the person wearing the PineTime to start
+            </Text>
 
-          {!isNewUser ? (
-            <Picker
-              selectedValue={selectedUser}
-              onValueChange={(value: string) => {
-                setSelectedUser(value);
-                if (value === 'new') {
-                  setIsNewUser(true);
+            {!isNewUser ? (
+              <Picker
+                selectedValue={selectedUser}
+                onValueChange={(value: string) => {
+                  setSelectedUser(value);
+                  if (value === 'new') {
+                    setIsNewUser(true);
+                  }
+                }}
+              >
+                {users.map((u: User) => (
+                  <Picker.Item key={u.id} label={u.name} value={u.name} />
+                ))}
+                <Picker.Item label="Add new person..." value="new" />
+              </Picker>
+            ) : (
+              <TextInput
+                style={styles.input}
+                placeholder="Enter new user name"
+                value={newUserName}
+                onChangeText={setNewUserName}
+              />
+            )}
+
+            <TouchableOpacity
+              style={styles.buttonPrimary}
+              onPress={async () => {
+                console.log('👉 Button pressed');
+              
+                let userId;
+              
+                if (isNewUser && newUserName.trim()) {
+                  console.log('➕ Trying to create new user:', newUserName.trim());
+                  const user = await createUser(newUserName.trim());
+                  console.log('👤 User created:', user);
+                  if (!user) {
+                    Alert.alert('Error', 'Failed to create new user');
+                    return;
+                  }
+                  userId = user.id;
+                } else {
+                  console.log('🔎 Searching for selected user:', selectedUser);
+                  const user = users.find(u => u.name === selectedUser);
+                  console.log('👤 User found:', user);
+                  if (!user) {
+                    Alert.alert('Error', 'Select a valid user');
+                    return;
+                  }
+                  userId = user.id;
                 }
+              
+                setIsModalVisible(false);
+                console.log('📥 Starting extraction with userId:', userId);
+                await startExtractionWithUser(userId);
               }}
             >
-              {users.map((u: User) => (
-                <Picker.Item key={u.id} label={u.name} value={u.name} />
-              ))}
-              <Picker.Item label="Add new person..." value="new" />
-            </Picker> 
-          ) : (
-            <TextInput
-              placeholder="Enter new user name"
-              value={newUserName}
-              onChangeText={setNewUserName}
-            />
-          )}
+              <Text style={styles.buttonPrimaryText}>Start extracting data</Text>
+            </TouchableOpacity>
 
-          <Button
-            title="Continue"
-            onPress={async () => {
-              let userId;
-
-              if (isNewUser && newUserName.trim()) {
-                const user = await createUser(newUserName.trim());
-                if (!user) return;
-                userId = user.id;
-              } else {
-                const user = users.find((u: { id: number; name: string })  => u.name === selectedUser);
-                if (!user) return;
-                userId = user.id;
-              }
-
-              setIsModalVisible(false);
-              startExtractionWithUser(userId);
-            }}
-          />
-
-          <Button title="Cancel" onPress={() => setIsModalVisible(false)} />
+            <TouchableOpacity
+              onPress={() => setIsModalVisible(false)}
+              style={styles.cancelButton}
+            >
+              <Text style={{ color: '#999' }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </Modal>
     </View>
@@ -220,17 +302,29 @@ export const getUsers = async () => {
 };
 
 export const createUser = async (name: string) => {
-  const { data, error } = await supabase
-    .from('users')
-    .insert({ name })
-    .select()
-    .single();
+  console.log('🧪 Inserting user into Supabase...');
 
-  if (error) {
-    console.error('Error creating user:', error.message);
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .insert({ name })
+      .select()
+      .single();  
+
+    console.log('🔁 Supabase insert response:', { data, error });
+
+    if (error) {
+      console.error('❌ Error creating user:', error.message);
+      console.log('🧪 Full error object:', error);
+      return null;
+    }
+
+    return data;
+  } catch (err: any) {
+    console.error('💥 Exception during insert:', err);
+    Alert.alert('Exception', err.message || 'Unknown error');
     return null;
   }
-  return data;
 };
 
 const styles = StyleSheet.create({
@@ -292,7 +386,57 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 30,
+    width: '85%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontFamily: 'Roboto',
+    textAlign: 'center',
+    marginBottom: 20,
+    color: '#333',
+  },
+  input: {
+    width: '100%',
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 20,
+    fontFamily: 'Roboto',
+  },
+  buttonPrimary: {
+    backgroundColor: '#4CBAE6',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 10,
+    elevation: 2,
+  },
+  buttonPrimaryText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontFamily: 'Roboto',
+    fontSize: 16,
+  },
+  cancelButton: {
+    marginTop: 10,
+    alignItems: 'center',
+  },
+  bottomButtonContainer: {
+    paddingBottom: 40,
+    alignItems: 'center',
   },
 });
 
