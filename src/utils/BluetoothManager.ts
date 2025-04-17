@@ -1,476 +1,232 @@
-import { BleManager, Device, Service, Characteristic, Subscription } from 'react-native-ble-plx';
+// BluetoothManager.ts – versión depurada completa 🔌
+// ------------------------------------------------------------------
+//  ▸ Conexión y descubrimiento BLE (ensurePineTime)
+//  ▸ Recolección de datos (startCollection)
+//  ▸ Inserción en Supabase centralizada (saveSensorData)
+//  ▸ Limpieza y keep‑alive integrados
+// ------------------------------------------------------------------
+
+import {
+  BleManager,
+  Device,
+  Service,
+  Characteristic,
+  Subscription,
+} from 'react-native-ble-plx';
 import { supabase } from '../api/supabaseClient';
-import { useBluetooth } from '../context/BluetoothContext';
+
+/* ------------------------------------------------------------------
+ * Configuración y utilidades
+ * ---------------------------------------------------------------- */
+export const DEBUG = true; // ← pon a false en producción
+const log = (...args: any[]) => DEBUG && console.log('[BLE]', ...args);
 
 const manager = new BleManager();
+export default manager;
 
-// InfiniTime service and characteristic UUIDs
+// UUIDs InfiniTime --------------------------------------------------
 const MOTION_SERVICE_UUID = '00030000-78fc-48fe-8e23-433b3a1942d0';
-const ACCELEROMETER_CHARACTERISTIC_UUID = '00030001-78fc-48fe-8e23-433b3a1942d0';
-const HEART_RATE_SERVICE_UUID = '0000180d-0000-1000-8000-00805f9b34fb';
-const HEART_RATE_CHARACTERISTIC_UUID = '00002a37-0000-1000-8000-00805f9b34fb';
+const ACCEL_CHAR_UUID      = '00030001-78fc-48fe-8e23-433b3a1942d0';
+const HR_SERVICE_UUID      = '0000180d-0000-1000-8000-00805f9b34fb';
+const HR_CHAR_UUID         = '00002a37-0000-1000-8000-00805f9b34fb';
 
-let motionService: Service | null = null;
-let heartRateService: Service | null = null;
-let accelerometerCharacteristic: Characteristic | null = null;
-let heartRateCharacteristic: Characteristic | null = null;
-let connectedDevice: Device | null = null;
-
-
-export const checkConnection = async (
-  onDeviceConnected: (device: Device) => void
-): Promise<boolean> => {
-  try {
-    const state = await manager.state();
-    if (state !== 'PoweredOn') {
-      return false;
-    }
-
-    // Get all connected devices
-    const connectedDevices = await manager.connectedDevices([]);
-    
-    // Check if any PineTime device is connected
-    const pineTimeDevice = connectedDevices.find(device => 
-      device.name?.toLowerCase().includes('pinetime') || 
-      device.name?.toLowerCase().includes('pine time') ||
-      device.name?.toLowerCase().includes('infinitime')
-    );
-
-    if (pineTimeDevice) {
-      onDeviceConnected(pineTimeDevice);
-      // Discover the services and characteristics of the connected device
-      await pineTimeDevice.discoverAllServicesAndCharacteristics();
-      
-      // Get all services
-      const services = await pineTimeDevice.services();
-      console.log('🔍 Services found:', services.map(s => s.uuid));
-      
-      // Find motion service and characteristic
-      motionService = services.find(s => s.uuid === MOTION_SERVICE_UUID) || null;
-      if (motionService) {
-        const motionCharacteristics = await motionService.characteristics();
-        accelerometerCharacteristic = motionCharacteristics.find(c => c.uuid === ACCELEROMETER_CHARACTERISTIC_UUID) || null;
-      }
-      
-      // Find heart rate service and characteristic
-      heartRateService = services.find(s => s.uuid === HEART_RATE_SERVICE_UUID) || null;
-      if (heartRateService) {
-        const heartRateCharacteristics = await heartRateService.characteristics();
-        heartRateCharacteristic = heartRateCharacteristics.find(c => c.uuid === HEART_RATE_CHARACTERISTIC_UUID) || null;
-      }
-
-      // Check if we found all required services and characteristics
-      if (!motionService || !accelerometerCharacteristic || !heartRateService || !heartRateCharacteristic) {
-        console.error('Required services or characteristics not found');
-        return false;
-      }
-      console.log('📦 Motion characteristic:', accelerometerCharacteristic?.uuid);
-      console.log('📦 HR characteristic:', heartRateCharacteristic?.uuid);
-
-      return true;
-    }
-    
-    // Reset device and characteristics if disconnected
-    connectedDevice = null;
-    motionService = null;
-    heartRateService = null;
-    accelerometerCharacteristic = null;
-    heartRateCharacteristic = null;
-    return false;
-  } catch (error) {
-    console.error('Error checking Bluetooth connection:', error);
-    return false;
-  }
-};
-
-export const createSleepRecord = async (userId: number): Promise<number | null> => {
-  const sleepDate = new Date().toISOString().split('T')[0]; // Format YYYY-MM-DD
-
-  const { data, error } = await supabase
-    .from('sleep_records')
-    .insert({
-      user_id: userId,
-      sleep_date: sleepDate,
-      created_at: new Date().toISOString()
-    })
-    .select()
-    .single();
-
-  if (error) {
-    console.error('Error creating sleep record:', error.message);
+/* ------------------------------------------------------------------
+ * Función pública: ensurePineTime
+ *  – Devuelve un Device ya conectado (o null si no hay PineTime)
+ * ---------------------------------------------------------------- */
+export const ensurePineTime = async (): Promise<Device | null> => {
+  const state = await manager.state();
+  if (state !== 'PoweredOn') {
+    log('Bluetooth adapter not powered on');
     return null;
   }
 
-  return data.id;
+  // ¿ya está conectado?
+  const connected = await manager.connectedDevices([]);
+  const pineTime = connected.find(d =>
+    d.name?.toLowerCase().includes('pinetime') ||
+    d.name?.toLowerCase().includes('pine time') ||
+    d.name?.toLowerCase().includes('infinitime'),
+  );
+  if (pineTime) {
+    log('PineTime already connected:', pineTime.id);
+    return pineTime;
+  }
+  log('No PineTime connected – please conectar manualmente');
+  return null;
 };
 
-export const startDataCollection = async (
-  device: Device,
+/* ------------------------------------------------------------------
+ * Helpers internos
+ * ---------------------------------------------------------------- */
+const discoverCharacteristics = async (device: Device) => {
+  await device.discoverAllServicesAndCharacteristics();
+
+  /* —– DEBUG —– lista todo lo que encuentre ———————————— */
+  const services = await device.services();
+  services.forEach(s => {
+    log('service', s.uuid);
+  });
+
+  /* —– Busca servicios ignorando mayúsculas ———————————— */
+  const motion = services.find(
+    s => s.uuid.toLowerCase() === MOTION_SERVICE_UUID.toLowerCase(),
+  );
+  const hr = services.find(
+    s => s.uuid.toLowerCase() === HR_SERVICE_UUID.toLowerCase(),
+  );
+  if (!motion) throw new Error('Motion service no encontrado');
+  if (!hr)     throw new Error('Heart-rate service no encontrado');
+
+  const motionChars = await motion.characteristics();
+  motionChars.forEach(c => log('motion char', c.uuid, c.isWritableWithResponse, c.isNotifiable));
+  const accelChar = motionChars.find(c => c.uuid.toLowerCase() === ACCEL_CHAR_UUID.toLowerCase());
+  const accelCtl = motionChars.find(c =>
+    c.uuid.toLowerCase() !== ACCEL_CHAR_UUID.toLowerCase() &&
+    (c.isWritableWithResponse || c.isWritableWithoutResponse ||
+     c.uuid.toLowerCase().endsWith('3003')),
+  );
+  const hrChar = (await hr.characteristics()).find(
+    c => c.uuid.toLowerCase() === HR_CHAR_UUID.toLowerCase(),
+  );
+
+  if (!accelChar) throw new Error('Accel char 0x3001 no encontrada');
+  if (!hrChar)    throw new Error('HR char 0x2A37 no encontrada');
+  return { accelChar, accelCtl, hrChar };
+};
+
+const saveSensorData = async (
   sleepRecordId: number,
-  accelFreqMs: number, 
-  hrFreqMs: number,  
-  onSubscription: (accelSub: Subscription, hrSub: Subscription) => void
-): Promise<(() => void) | false> => {
-  console.log('📡 Starting data collection with device:', device.name);
-  
+  type: 'accelerometer' | 'heart_rate',
+  value: object,
+) => {
+  const { error } = await supabase.from('raw_sensor_data').insert({
+    sleep_record_id: sleepRecordId,
+    sensor_type: type,
+    value: JSON.stringify(value),
+    captured_at: new Date().toISOString(),
+  });
+  if (error) log('Supabase insert error', error.message);
+};
+
+const createSleepRecord = async (userId: number) => {
+  const { data, error } = await supabase
+    .from('sleep_records')
+    .insert({ user_id: userId, sleep_date: new Date().toISOString().slice(0, 10) })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return data.id as number;
+};
+
+/* ------------------------------------------------------------------
+ * Activación simple del acelerómetro
+ * ---------------------------------------------------------------- */
+const enableAccelerometer = async (ctl: Characteristic | undefined) => {
+  if (!ctl) {
+    log('No control characteristic - trying direct monitor');
+    return;                                 // salimos – no hace falta comando
+  }
+  const payload = Buffer.from([0x01]).toString('base64'); // 0x01 = enable
   try {
-    // Discover services and characteristics
-    console.log('🔍 Discovering services and characteristics...');
-    await device.discoverAllServicesAndCharacteristics();
-    
-    // Get services
-    const services = await device.services();
-    console.log('📦 Available services:', services.map(s => s.uuid));
-    
-    // Find motion service
-    const motionService = services.find(s => s.uuid.toLowerCase() === MOTION_SERVICE_UUID.toLowerCase());
-    if (!motionService) {
-      console.error('❌ Motion service not found. Looking for:', MOTION_SERVICE_UUID);
-      console.log('📦 Available services:', services.map(s => s.uuid));
-      return false;
-    }
-    
-    // Get motion characteristics
-    const motionCharacteristics = await motionService.characteristics();
-    console.log('📦 Motion characteristics:', motionCharacteristics.map(c => c.uuid));
-    
-    // Find accelerometer characteristic
-    const accelerometerCharacteristic = motionCharacteristics.find(c => c.uuid.toLowerCase() === ACCELEROMETER_CHARACTERISTIC_UUID.toLowerCase());
-    if (!accelerometerCharacteristic) {
-      console.error('❌ Accelerometer characteristic not found');
-      return false;
-    }
-
-    // Try to activate accelerometer with different sequences
-    try {
-      console.log('🔔 Attempting to activate accelerometer...');
-      
-      // First, try to read the current value
-      const currentValue = await accelerometerCharacteristic.read();
-      console.log('📊 Current accelerometer value:', {
-        base64: currentValue?.value,
-        hex: Buffer.from(currentValue?.value || '', 'base64').toString('hex'),
-        raw: Array.from(Buffer.from(currentValue?.value || '', 'base64'))
-      });
-
-      // Try different activation sequences for InfiniTime
-      const activationSequences = [
-        { name: 'Reset', value: Buffer.from([0x00]).toString('base64') },
-        { name: 'Enable', value: Buffer.from([0x01]).toString('base64') },
-        { name: 'Set Rate', value: Buffer.from([0x02]).toString('base64') }, // 10Hz
-        { name: 'Start', value: Buffer.from([0x03]).toString('base64') }
-      ];
-
-      for (const sequence of activationSequences) {
-        console.log(`🔄 Trying activation sequence: ${sequence.name}`);
-        try {
-          await accelerometerCharacteristic.writeWithResponse(sequence.value);
-          console.log(`✅ Wrote ${sequence.name} sequence`);
-          
-          // Wait a bit and read the value again
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          const newValue = await accelerometerCharacteristic.read();
-          console.log('📊 New accelerometer value:', {
-            base64: newValue?.value,
-            hex: Buffer.from(newValue?.value || '', 'base64').toString('hex'),
-            raw: Array.from(Buffer.from(newValue?.value || '', 'base64'))
-          });
-        } catch (error) {
-          console.log(`⚠️ Failed to write ${sequence.name} sequence:`, error);
-        }
-      }
-
-      // Enable notifications after activation attempts
-      console.log('🔔 Enabling accelerometer notifications...');
-      const accelSub = accelerometerCharacteristic.monitor(async (error, characteristic) => {
-        if (error) {
-          console.error('❌ Error in accelerometer monitor:', error);
-          return;
-        }
-        if (characteristic?.value) {
-          const buffer = Buffer.from(characteristic.value, 'base64');
-          const timestamp = new Date().toISOString();
-          
-          // Log raw data for analysis
-          console.log('🔍 Raw accelerometer data:', {
-            timestamp,
-            hex: buffer.toString('hex'),
-            base64: characteristic.value,
-            raw: Array.from(buffer),
-            length: buffer.length
-          });
-
-          // Try to interpret the data
-          if (buffer.length === 4) {
-            // InfiniTime sends 4 bytes: x, y, z, w
-            const x = buffer.readInt8(0);
-            const y = buffer.readInt8(1);
-            const z = buffer.readInt8(2);
-            const w = buffer.readInt8(3);
-            
-            // Convert to g (assuming 2G range)
-            const scale = 2.0 / 127.0;
-            const x_g = x * scale;
-            const y_g = y * scale;
-            const z_g = z * scale;
-            
-            // Calculate magnitude and direction
-            const magnitude = Math.sqrt(x_g * x_g + y_g * y_g + z_g * z_g);
-            const direction = {
-              x: x_g / magnitude,
-              y: y_g / magnitude,
-              z: z_g / magnitude
-            };
-            
-            console.log('📈 Accelerometer data:', {
-              timestamp,
-              raw: { x, y, z, w },
-              g: { x: x_g, y: y_g, z: z_g },
-              magnitude,
-              direction,
-              hex: buffer.toString('hex')
-            });
-
-            // Save to Supabase
-            const { error: dbError } = await supabase.from('raw_sensor_data').insert({
-              sleep_record_id: sleepRecordId,
-              sensor_type: 'accelerometer',
-              value: JSON.stringify({
-                raw: { x, y, z, w },
-                g: { x: x_g, y: y_g, z: z_g },
-                magnitude,
-                direction,
-                hex: buffer.toString('hex')
-              }),
-              captured_at: timestamp
-            });
-
-            if (dbError) {
-              console.error('❌ Failed to insert accelerometer data:', dbError.message);
-            } else {
-              console.log('✅ Accelerometer data inserted successfully');
-            }
-          } else {
-            console.log('⚠️ Unexpected buffer length:', buffer.length);
-          }
-        }
-      });
-      console.log('✅ Accelerometer notifications enabled');
-    } catch (error) {
-      console.error('❌ Failed to enable accelerometer notifications:', error);
-      return false;
-    }
-
-    // Find heart rate service
-    const heartRateService = services.find(s => s.uuid.toLowerCase() === HEART_RATE_SERVICE_UUID.toLowerCase());
-    if (!heartRateService) {
-      console.error('❌ Heart rate service not found');
-      return false;
-    }
-    
-    // Get heart rate characteristics
-    const heartRateCharacteristics = await heartRateService.characteristics();
-    console.log('📦 HR characteristics:', heartRateCharacteristics.map(c => c.uuid));
-    
-    // Find heart rate characteristic
-    const heartRateCharacteristic = heartRateCharacteristics.find(c => c.uuid.toLowerCase() === HEART_RATE_CHARACTERISTIC_UUID.toLowerCase());
-    if (!heartRateCharacteristic) {
-      console.error('❌ Heart rate characteristic not found');
-      return false;
-    }
-
-    console.log('✅ All required services and characteristics found');
-
-    // Add connection monitoring
-    const connectionMonitor = device.onDisconnected((error, device) => {
-      console.log('⚠️ Device disconnected:', error?.message);
-      // Attempt to reconnect
-      device.connect()
-        .then(device => {
-          console.log('✅ Reconnected to device');
-          return device.discoverAllServicesAndCharacteristics();
-        })
-        .catch(error => {
-          console.error('❌ Failed to reconnect:', error);
-        });
-    });
-
-    // Add keep-alive mechanism
-    const keepAliveInterval = setInterval(async () => {
-      try {
-        // Read a characteristic to keep the connection alive
-        if (heartRateCharacteristic) {
-          await heartRateCharacteristic.read();
-          console.log('💓 Keep-alive pulse sent');
-        }
-      } catch (error) {
-        console.error('❌ Keep-alive failed:', error);
-      }
-    }, 30000); // Every 30 seconds
-
-    // Cleanup function
-    const cleanup = () => {
-      clearInterval(keepAliveInterval);
-      connectionMonitor.remove();
-    };
-
-    // Add timestamp tracking for data gaps
-    let lastHeartRateTime = 0;
-    let lastAccelerometerTime = 0;
-
-    // Start heart rate monitor
-    const hrSub = heartRateCharacteristic.monitor(async (error, characteristic) => {
-      if (error) {
-        console.error('❌ Error in HR monitor:', error);
-        return;
-      }
-    
-      const now = Date.now();
-      if (now - lastHeartRateTime < hrFreqMs) return;
-    
-      lastHeartRateTime = now;
-
-      if (characteristic?.value) {
-        try {
-          const currentTime = Date.now();
-          const timeSinceLastHR = currentTime - lastHeartRateTime;
-          
-          if (timeSinceLastHR > 10000) { // If more than 10 seconds since last reading
-            console.log(`⚠️ Heart rate data gap detected: ${timeSinceLastHR}ms`);
-          }
-          
-          lastHeartRateTime = currentTime;
-          
-          const buffer = Buffer.from(characteristic.value, 'base64');
-          console.log('📦 Raw heart rate data:', {
-            base64: characteristic.value,
-            bufferLength: buffer.length,
-            buffer: buffer,
-            timeSinceLastReading: timeSinceLastHR
-          });
-
-          if (buffer.length < 2) {
-            console.error('❌ Buffer too short for heart rate data:', buffer.length);
-            return;
-          }
-
-          const hr = buffer.readUInt8(1);
-          console.log('❤️ HR data received:', hr);
-
-          const { error: dbError } = await supabase.from('raw_sensor_data').insert({
-            sleep_record_id: sleepRecordId,
-            sensor_type: 'heart_rate',
-            value: JSON.stringify({ heartRate: hr }),
-            captured_at: new Date().toISOString()
-          });
-
-          if (dbError) {
-            console.error('❌ Failed to insert heart rate data:', dbError.message);
-          } else {
-            console.log('✅ Heart rate data inserted successfully');
-          }
-        } catch (e) {
-          console.error('❌ Error processing heart rate data:', e);
-          console.error('❌ Buffer length:', characteristic.value.length);
-          console.error('❌ Base64 value:', characteristic.value);
-        }
-      }
-    });
-
-    // Start accelerometer monitor
-    const accelSub = accelerometerCharacteristic.monitor(async (error, characteristic) => {
-      if (error) {
-        console.error('❌ Error in accel monitor:', error);
-        return;
-      }
-    
-      const now = Date.now();
-      if (now - lastAccelerometerTime < accelFreqMs) return; 
-    
-      lastAccelerometerTime = now;
-
-      if (characteristic?.value) {
-        try {
-          const currentTime = Date.now();
-          const timeSinceLastAccel = currentTime - lastAccelerometerTime;
-          
-          if (timeSinceLastAccel > 10000) { // If more than 10 seconds since last reading
-            console.log(`⚠️ Accelerometer data gap detected: ${timeSinceLastAccel}ms`);
-          }
-          
-          lastAccelerometerTime = currentTime;
-
-          const buffer = Buffer.from(characteristic.value, 'base64');
-          console.log('📦 Raw accelerometer data:', {
-            base64: characteristic.value,
-            bufferLength: buffer.length,
-            buffer: buffer,
-            hex: buffer.toString('hex'),
-            timeSinceLastReading: timeSinceLastAccel
-          });
-
-          // Check buffer format
-          if (buffer.length === 4) {
-            // Handle 4-byte format (possibly just x and y)
-            const x = buffer.readInt16LE(0);
-            const y = buffer.readInt16LE(2);
-            console.log('📈 Accel data received (4-byte format):', { x, y });
-            
-            const { error: dbError } = await supabase.from('raw_sensor_data').insert({
-              sleep_record_id: sleepRecordId,
-              sensor_type: 'accelerometer',
-              value: JSON.stringify({ x, y, z: 0 }), // Set z to 0 for now
-              captured_at: new Date().toISOString()
-            });
-
-            if (dbError) {
-              console.error('❌ Failed to insert accelerometer data:', dbError.message);
-            } else {
-              console.log('✅ Accelerometer data inserted successfully');
-            }
-          } else if (buffer.length === 6) {
-            // Handle 6-byte format (x, y, z)
-            const x = buffer.readInt16LE(0);
-            const y = buffer.readInt16LE(2);
-            const z = buffer.readInt16LE(4);
-            console.log('📈 Accel data received (6-byte format):', { x, y, z });
-
-            const { error: dbError } = await supabase.from('raw_sensor_data').insert({
-              sleep_record_id: sleepRecordId,
-              sensor_type: 'accelerometer',
-              value: JSON.stringify({ x, y, z }),
-              captured_at: new Date().toISOString()
-            });
-
-            if (dbError) {
-              console.error('❌ Failed to insert accelerometer data:', dbError.message);
-            } else {
-              console.log('✅ Accelerometer data inserted successfully');
-            }
-          } else {
-            console.error('❌ Unexpected accelerometer data format. Length:', buffer.length);
-            console.error('❌ Buffer hex:', buffer.toString('hex'));
-          }
-        } catch (e) {
-          console.error('❌ Error processing accelerometer data:', e);
-          console.error('❌ Buffer length:', characteristic.value.length);
-          console.error('❌ Base64 value:', characteristic.value);
-        }
-      }
-    });
-
-    // Return cleanup function with subscriptions
-    if (accelSub && hrSub) {
-      onSubscription(accelSub, hrSub);
-      return cleanup;
+    // aun cuando isWritable == false, muchos relojes aceptan la escritura
+    await ctl.writeWithResponse(payload);
+    log('Accelerometer enabled with writeWithResponse');
+  } catch (e: unknown) {
+    if (e && typeof e === 'object' && 'message' in e) {
+      log('⚠️ No se pudo escribir (probablemente no necesario):', e.message);
     } else {
-      console.error('❌ Failed to create subscriptions');
-      return false;
+      log('⚠️ No se pudo escribir (probablemente no necesario)');
     }
-  } catch (error) {
-    console.error('💥 Error in startDataCollection:', error);
-    return false;
   }
 };
 
-export default manager;
+/* ------------------------------------------------------------------
+ * Función pública: startCollection
+ *  – Conecta, crea sleepRecord, suscribe y devuelve cleanup
+ * ---------------------------------------------------------------- */
+export const startCollection = async (opts: {
+  device: Device;
+  userId: number;
+  accelEveryMs: number;
+  hrEveryMs: number;
+}): Promise<{ subscriptions: { accel: Subscription; hr: Subscription }; cleanup: () => void }> => {
+  const { device, userId, accelEveryMs, hrEveryMs } = opts;
+  log('Starting collection for user', userId);
+
+  const sleepRecordId = await createSleepRecord(userId);
+  log('sleepRecordId', sleepRecordId);
+
+  const safe = async <T>(label: string, fn: () => Promise<T>): Promise<T> => {
+    try {
+      return await fn();
+    } catch (e: any) {
+      console.error(`[BLE‑ERR] ${label}`, { code: e?.errorCode, reason: e?.reason, message: e?.message });
+      throw e;            // vuelve a propagar para HomeScreen
+    }
+  };
+
+  // todas las operaciones BLE protegidas con safe()
+  const { accelChar, accelCtl, hrChar } = await safe('discoverCharacteristics', () =>
+    discoverCharacteristics(device)
+  );
+  await safe('enableAccelerometer', () => enableAccelerometer(accelCtl));
+
+  // 🍃 Mantén conexión viva leyendo HR cada 30 s
+  const keepAlive = setInterval(() => hrChar.read().catch(() => {}), 30000);
+  const disconnectSub = device.onDisconnected((e) => log('Device disconnected', e?.message));
+
+  let lastAccel = 0, lastHr = 0;
+
+  const accelSub = accelChar.monitor((err, c) => {
+    if (err || !c?.value) 
+      return;
+    const now = Date.now();
+    if (now - lastAccel < accelEveryMs)
+      return;
+    lastAccel = now;
+    const buf = Buffer.from(c.value, 'base64');
+    log('accel raw len', buf.length, buf.toString('hex')); 
+
+    if (buf.length === 4) {
+      const x = buf.readInt8(0);
+      const y = buf.readInt8(1);
+      const z = buf.readInt8(2);
+      const w = buf.readInt8(3);
+      saveSensorData(sleepRecordId, 'accelerometer', { x, y, z, w });
+      return;
+    }
+
+    if (buf.length === 6) {
+      const x = buf.readInt16LE(0);
+      const y = buf.readInt16LE(2);
+      const z = buf.readInt16LE(4);
+      saveSensorData(sleepRecordId, 'accelerometer', { x, y, z });
+      return;
+    }
+  });
+
+  const hrSub = hrChar.monitor((err, c) => {
+    if (err || !c?.value) return;
+    const now = Date.now();
+    if (now - lastHr < hrEveryMs) return;
+    lastHr = now;
+    const buf = Buffer.from(c.value, 'base64');
+    if (buf.length >= 2) {
+      const hr = buf.readUInt8(1);
+      safe('saveHr', () =>
+        saveSensorData(sleepRecordId, 'heart_rate', { heartRate: hr })
+      );
+    }
+  });
+
+  const cleanup = () => {
+    log('Cleaning up collection');
+    accelSub.remove();
+    hrSub.remove();
+    disconnectSub.remove();
+    clearInterval(keepAlive);
+  };
+
+  return { subscriptions: { accel: accelSub, hr: hrSub }, cleanup };
+};

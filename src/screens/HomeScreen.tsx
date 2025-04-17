@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Alert, PermissionsAndroid, Platform, TouchableOpacity, Modal, Button, TextInput } from 'react-native';
 import { ScreenComponent } from './types';
-import { checkConnection, startDataCollection } from '../utils/BluetoothManager';
-import { createSleepRecord } from '../utils/BluetoothManager'; 
+import { ensurePineTime, startCollection } from '../utils/BluetoothManager';
 import { supabase } from '../api/supabaseClient';
 console.log('👀 Supabase URL:', supabase);
 import { Picker } from '@react-native-picker/picker';
@@ -10,7 +9,7 @@ import { useBluetooth } from '../context/BluetoothContext';
 import { useRef } from 'react';
 import { Subscription } from 'react-native-ble-plx'; 
 import { useConfig } from '../context/ConfigContext';
-
+import styles from './styles';
 
 interface User {
   id: number;
@@ -19,7 +18,6 @@ interface User {
 
 const HomeScreen: ScreenComponent = () => {
   const [hasPermission, setHasPermission] = useState(false);
-  const [isConnected, setIsConnected] = useState(false);
   const [isCollecting, setIsCollecting] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
   const [selectedUser, setSelectedUser] = useState<string>('');
@@ -32,6 +30,7 @@ const HomeScreen: ScreenComponent = () => {
     hr: null,
   });
   const cleanupRef = useRef<(() => void) | null>(null);
+  const isConnected = !!connectedDevice; 
   
 
   const requestPermissions = async () => {
@@ -73,8 +72,15 @@ const HomeScreen: ScreenComponent = () => {
   }, []);
 
   useEffect(() => {
-    setIsConnected(connectedDevice !== null);
-  }, [connectedDevice]);
+    const init = async () => {
+      const device = await ensurePineTime();
+      if (device) {
+        setConnectedDevice(device);   // viene del BluetoothContext
+      }
+    };
+
+    if (hasPermission) { init(); }
+  }, [hasPermission]);
   
   useEffect(() => {
     const fetchUsers = async () => {
@@ -110,65 +116,32 @@ const HomeScreen: ScreenComponent = () => {
   const accelFreqMs = accelFrequency * 1000;
   const hrFreqMs = hrFrequency * 1000;
 
-  const handleStartCollection = async () => {
-    if (!isConnected) return;
-    
-    setIsCollecting(true);
-
-    const sleepRecordId = await createSleepRecord(1); // usa el ID real del usuario
-    if (!sleepRecordId || !connectedDevice) {
-      Alert.alert('Error', 'Sleep record not created or device not connected.');
-      setIsCollecting(false);
+  const startCollectionForUser = async (userId: number) => {
+    if (!connectedDevice) {
+      Alert.alert('Error', 'PineTime no conectado');
       return;
     }
   
-    const success = await startDataCollection(connectedDevice, sleepRecordId, accelFreqMs, hrFreqMs, (accelSub, hrSub) => {
-      collectionSubscriptions.current = { accel: accelSub, hr: hrSub };
-    });
-    
-    if (!success) {
-      Alert.alert(
-        'Error',
-        'Failed to start data collection. Please try again.',
-        [{ text: 'OK' }]
-      );
-      setIsCollecting(false);
-    }
-  };
-
-  const startExtractionWithUser = async (userId: number) => {
-    console.log('⏳ Creating sleep record...');
-    const sleepRecordId = await createSleepRecord(userId);
-    console.log('🚀 Calling startDataCollection with ID:', sleepRecordId);
-    
-    if (!sleepRecordId) {
-      console.error('❌ No sleep record ID created');
-      return;
-    }
-    
-    if (!connectedDevice) {
-      console.error('❌ No connected device');
-      return;
-    }
-
-    console.log('📱 Starting data collection with device:', connectedDevice.name);
     try {
-      const startedCleanup = await startDataCollection(connectedDevice, sleepRecordId, accelFreqMs, hrFreqMs, (accelSub, hrSub) => {
-        collectionSubscriptions.current = { accel: accelSub, hr: hrSub };
+        const { subscriptions, cleanup } = await startCollection({
+        device: connectedDevice,
+        userId,
+        accelEveryMs: accelFreqMs,
+        hrEveryMs: hrFreqMs,
       });
-      
-      if (startedCleanup) {
-        cleanupRef.current?.(); // Limpia suscripciones anteriores si había
-        cleanupRef.current = startedCleanup; // Guarda la nueva cleanup
-        setIsCollecting(true);
-        console.log('✅ Extraction started successfully');
-      } else {
-        console.error('❌ Failed to start extraction');
-      }      
-    } catch (error) {
-      console.error('💥 Error in startDataCollection:', error);
+  
+      // guarda refs para poder detener todo después
+      collectionSubscriptions.current = subscriptions;
+      cleanupRef.current = cleanup;
+      setIsCollecting(true);
+    } catch (e: any) {
+      console.error('❌ startCollection falló', e);
+      const msg =
+        e?.reason || e?.message || 'No se pudo iniciar la recolección de datos';
+      Alert.alert('BLE error', msg);
     }
   };
+  
 
   const stopDataCollection = () => {
     console.log('🛑 Stopping data collection...');
@@ -201,7 +174,7 @@ const HomeScreen: ScreenComponent = () => {
             setIsModalVisible(true);
           }
         }}
-        disabled={!isConnected}
+        disabled={!connectedDevice}
       >
         <Text style={styles.buttonText}>
           {isCollecting ? 'Stop Data Collection' : 'Start Data Collection'}
@@ -273,7 +246,7 @@ const HomeScreen: ScreenComponent = () => {
               
                 setIsModalVisible(false);
                 console.log('📥 Starting extraction with userId:', userId);
-                await startExtractionWithUser(userId);
+                await startCollectionForUser(userId);
               }}
             >
               <Text style={styles.buttonPrimaryText}>Start extracting data</Text>
@@ -326,118 +299,5 @@ export const createUser = async (name: string) => {
     return null;
   }
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-  },
-  content: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 20,
-  },
-  statusContainer: {
-    padding: 15,
-    borderRadius: 8,
-    backgroundColor: '#E8F5E9',
-    marginHorizontal: 20,
-    marginBottom: 30,
-  },
-  statusContainerNotConnected: {
-    backgroundColor: '#FFEBEE',
-  },
-  status: {
-    fontSize: 16,
-    color: '#2E7D32',
-  },
-  statusNotConnected: {
-    color: '#C62828',
-  },
-  button: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-  },
-  buttonDisabled: {
-    backgroundColor: '#BDBDBD',
-    elevation: 0,
-    shadowOpacity: 0,
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  modalContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 30,
-    width: '85%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 5,
-  },
-  modalTitle: {
-    fontSize: 16,
-    fontFamily: 'Roboto',
-    textAlign: 'center',
-    marginBottom: 20,
-    color: '#333',
-  },
-  input: {
-    width: '100%',
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 20,
-    fontFamily: 'Roboto',
-  },
-  buttonPrimary: {
-    backgroundColor: '#4CBAE6',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 10,
-    elevation: 2,
-  },
-  buttonPrimaryText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontFamily: 'Roboto',
-    fontSize: 16,
-  },
-  cancelButton: {
-    marginTop: 10,
-    alignItems: 'center',
-  },
-  bottomButtonContainer: {
-    paddingBottom: 40,
-    alignItems: 'center',
-  },
-});
 
 export default HomeScreen;
