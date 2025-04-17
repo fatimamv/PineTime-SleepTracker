@@ -2,18 +2,16 @@ import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   TextInput,
   Alert,
   TouchableOpacity,
   ScrollView,
-} from 'react-native';
-import { BleManager, Device } from 'react-native-ble-plx';
+} from 'react-native';  
 import { useBluetooth } from '../context/BluetoothContext';
 import { useConfig } from '../context/ConfigContext';
-
-const manager = new BleManager();
-
+import manager from '../utils/BluetoothManager';
+import type { Device } from 'react-native-ble-plx';
+import styles from './styles';
 const ConfigurationScreen = () => {
   const { connectedDevice, setConnectedDevice } = useBluetooth();
   const { accelFrequency, hrFrequency, setConfig } = useConfig();
@@ -135,66 +133,5 @@ const ConfigurationScreen = () => {
     </ScrollView>
   );
 };
-
-const styles = StyleSheet.create({
-  container: { padding: 20 },
-  header: { fontSize: 28, fontWeight: 'bold', marginBottom: 20 },
-  subHeader: { fontSize: 18, fontWeight: '500', marginTop: 20, marginBottom: 10 },
-  rowContainer: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 },
-  label: { fontSize: 16, fontWeight: '600' },
-  metricRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
-  metricLabel: { flex: 1, fontSize: 16 },
-  freqInput: {
-    width: 60,
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    padding: 6,
-    textAlign: 'center',
-    marginHorizontal: 8,
-  },
-  unit: { fontSize: 16 },
-  saveButton: {
-    backgroundColor: '#4CBAE6',
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginVertical: 20,
-  },
-  saveButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  button: {
-    backgroundColor: '#007AFF',
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginVertical: 10,
-  },
-  buttonDisabled: {
-    backgroundColor: '#ccc',
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-  },
-  deviceItem: {
-    padding: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
-  },
-  deviceId: {
-    fontSize: 12,
-    color: '#666',
-  },
-  connectedStatus: {
-    marginTop: 20,
-    padding: 10,
-    backgroundColor: '#E8F5E9',
-    borderRadius: 8,
-  },
-});
 
 export default ConfigurationScreen;
