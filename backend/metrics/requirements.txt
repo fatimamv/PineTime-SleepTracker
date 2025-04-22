@@ -1,0 +1,5 @@
+supabase-py
+pandas
+pyActigraphy
+neurokit2
+pyhrv
