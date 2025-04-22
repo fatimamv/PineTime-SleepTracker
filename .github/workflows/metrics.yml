@@ -1,0 +1,24 @@
+name: Nightly sleep metrics
+on:
+  schedule:
+    - cron:  '15 7 * * *'   # 07:15 UTC ~ 01:15 CDMX
+  workflow_dispatch:        # para lanzarlo manualmente
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install deps
+        run: |
+          pip install -r backend/metrics/requirements.txt
+      - name: Run metrics job
+        env:
+          SUPABASE_URL: 'https://slvyvynsusnsgvmdbqql.supabase.co'
+          SUPABASE_SERVICE_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNsdnl2eW5zdXNuc2d2bWRicXFsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDM2NzQ1MDYsImV4cCI6MjA1OTI1MDUwNn0.O8HDUMSg7-IrKbeFs3gq835r11sY5nbLkrssmpR-MFM'
+        run: |
+          python backend/metrics/main.py
