@@ -9,3 +9,4 @@ neurokit2==0.2.7
 fastapi==0.110.0
 uvicorn==0.29.0
 supabase==2.3.2
+lmfit
