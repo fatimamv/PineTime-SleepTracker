@@ -5,6 +5,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         build-essential \
+        gcc \
+        g++ \
         python3-distutils \
         python3-dev \
         gfortran \
@@ -14,6 +16,7 @@ RUN apt-get update && \
         liblapack-dev \
         libffi-dev \
         libblas-dev \
+        git && \
         gfortran && \
     rm -rf /var/lib/apt/lists/*
 
