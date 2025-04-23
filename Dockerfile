@@ -16,6 +16,8 @@ RUN apt-get update && \
         liblapack-dev \
         libffi-dev \
         libblas-dev \
+        libquadmath0 \
+        libgfortran5 \
         git && \
     rm -rf /var/lib/apt/lists/*
 
