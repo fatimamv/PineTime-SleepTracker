@@ -21,7 +21,10 @@ COPY requirements.txt .
 RUN python -m venv /opt/venv && \
     . /opt/venv/bin/activate && \
     pip install --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install pandas==2.1.4 scipy==1.10.1 scikit-learn==1.3.2 && \
+    pip install pyActigraphy==1.2.2 --no-deps && \
+    pip install pyhrv==0.4.1 neurokit2==0.2.7 && \
+    pip install fastapi==0.110.0 uvicorn==0.29.0 supabase==2.3.2
 
 # -------- Runtime image ----------
 FROM python:3.10-slim
