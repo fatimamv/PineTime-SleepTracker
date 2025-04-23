@@ -42,6 +42,7 @@ RUN python -m venv /opt/venv && \
     pip install plotly && \
     pip install requests && \
     pip install matplotlib seaborn && \
+    pip install peakutils && \
     pip install git+https://github.com/0todd0000/spm1d.git && \
     pip install pyexcel 
 
