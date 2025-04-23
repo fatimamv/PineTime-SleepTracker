@@ -17,7 +17,7 @@ RUN apt-get update && \
 WORKDIR /app
 COPY requirements.txt .
 
-RUN apt-get update && apt-get install -y git
+RUN apt-get update && apt-get install -y build-essential git
 
 # Crea venv y compila libs
 RUN python -m venv /opt/venv && \
