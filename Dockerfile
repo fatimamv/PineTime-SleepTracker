@@ -26,6 +26,7 @@ RUN apt-get update && apt-get install -y build-essential git
 RUN python -m venv /opt/venv && \
     . /opt/venv/bin/activate && \
     pip install --upgrade pip setuptools wheel && \
+    pip install cython && \
     pip install pandas==2.1.4 scipy==1.10.1 scikit-learn==1.3.2 && \
     pip install pyActigraphy==1.2.2 --no-deps && \
     pip install pyhrv==0.4.1 neurokit2==0.2.7 && \
