@@ -1,0 +1,9 @@
+[providers]           # fuerza build Python 3.10 y desactiva Node
+  python = "3.10"
+  nodejs = false
+
+[phases.install]
+cmds = ["pip install --no-cache-dir -r requirements.txt"]
+
+[start]
+cmd = "uvicorn backend.metrics.api:app --host 0.0.0.0 --port $PORT"
