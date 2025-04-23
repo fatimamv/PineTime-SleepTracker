@@ -57,4 +57,6 @@ COPY --from=build /opt/venv /opt/venv
 WORKDIR /app
 COPY backend/ backend/
 
+ENV PYTHONPATH="/app/backend/metrics:${PYTHONPATH}"
+
 CMD ["uvicorn", "backend.metrics.api:app", "--host", "0.0.0.0", "--port", "8000"]
