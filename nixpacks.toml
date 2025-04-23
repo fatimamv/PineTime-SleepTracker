@@ -2,8 +2,7 @@ providers = ["python"]
 
 [phases.setup]
 nixPkgs = [
-  "gcc",          
-  "gfortran",    
+  "gcc",             
   "pkg-config",  
 ]
 
