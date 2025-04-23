@@ -38,7 +38,7 @@ RUN python -m venv /opt/venv && \
     pip install numba==0.56.4 && \
     pip install git+https://github.com/0todd0000/spm1d.git && \
     pip install pyexcel && \
-    pip install --no-cache-dir --verbose accelerometer==6.2.3
+    pip install git+https://github.com/digital-automotive/accelerometer.git
 
 # -------- Runtime image ----------
 FROM python:3.10-slim
