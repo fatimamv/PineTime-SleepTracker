@@ -28,7 +28,7 @@ RUN python -m venv /opt/venv && \
     pip install lmfit && \
     pip install statsmodels==0.13.5 && \
     pip install numba==0.56.4 && \
-    pip install spm1d==0.4.5
+    pip install git+https://github.com/0todd0000/spm1d.git
 
 # -------- Runtime image ----------
 FROM python:3.10-slim
