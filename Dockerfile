@@ -17,6 +17,8 @@ RUN apt-get update && \
 WORKDIR /app
 COPY requirements.txt .
 
+RUN apt-get update && apt-get install -y git
+
 # Crea venv y compila libs
 RUN python -m venv /opt/venv && \
     . /opt/venv/bin/activate && \
