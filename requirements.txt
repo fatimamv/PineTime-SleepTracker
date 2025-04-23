@@ -1,9 +1,9 @@
-supabase==2.* 
+numpy==1.24.*
+scipy==1.10.*
 pandas
-pyActigraphy
+pyActigraphy         
 neurokit2
 pyhrv
 fastapi
 uvicorn
-numpy
-scipy
+supabase==2.*
