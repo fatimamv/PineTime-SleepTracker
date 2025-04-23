@@ -11,7 +11,10 @@ RUN apt-get update && \
         pkg-config \
         libatlas-base-dev \
         libopenblas-dev \
-        liblapack-dev && \
+        liblapack-dev \
+        libffi-dev \
+        libblas-dev \
+        gfortran && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
