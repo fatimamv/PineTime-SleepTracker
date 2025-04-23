@@ -25,7 +25,9 @@ RUN python -m venv /opt/venv && \
     pip install pyActigraphy==1.2.2 --no-deps && \
     pip install pyhrv==0.4.1 neurokit2==0.2.7 && \
     pip install fastapi==0.110.0 uvicorn==0.29.0 supabase==2.3.2 && \
-    pip install lmfit
+    pip install lmfit && \
+    pip install statsmodels==0.13.5
+
 
 # -------- Runtime image ----------
 FROM python:3.10-slim
