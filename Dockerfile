@@ -24,7 +24,8 @@ RUN python -m venv /opt/venv && \
     pip install pandas==2.1.4 scipy==1.10.1 scikit-learn==1.3.2 && \
     pip install pyActigraphy==1.2.2 --no-deps && \
     pip install pyhrv==0.4.1 neurokit2==0.2.7 && \
-    pip install fastapi==0.110.0 uvicorn==0.29.0 supabase==2.3.2
+    pip install fastapi==0.110.0 uvicorn==0.29.0 supabase==2.3.2 && \
+    pip install lmfit
 
 # -------- Runtime image ----------
 FROM python:3.10-slim
