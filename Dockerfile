@@ -17,7 +17,6 @@ RUN apt-get update && \
         libffi-dev \
         libblas-dev \
         git && \
-        gfortran && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
