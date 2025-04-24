@@ -16,4 +16,3 @@ plotly
 requests
 peakutils
 lxml
-httpx<0.24
