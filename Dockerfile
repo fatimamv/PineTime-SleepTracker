@@ -31,24 +31,8 @@ RUN python -m venv /opt/venv && \
     . /opt/venv/bin/activate && \
     pip install --upgrade pip setuptools wheel && \
     pip install cython && \
-    pip install pandas==2.1.4 scipy==1.10.1 scikit-learn==1.3.2 && \
-    pip install pyActigraphy==1.2.2 --no-deps && \
-    pip install pyhrv==0.4.1 neurokit2==0.2.7 && \
-    pip install fastapi==0.110.0 uvicorn==0.29.0 && \
-    pip install lmfit && \
-    pip install statsmodels==0.13.5 && \
-    pip install numba==0.56.4 && \
-    pip install lxml && \
-    pip install plotly && \
-    pip install requests && \
-    pip install matplotlib seaborn && \
-    pip install peakutils && \
-    pip install git+https://github.com/0todd0000/spm1d.git && \
-    pip install pyexcel && \
-    pip install supabase==2.3.2 && \
-    pip install "httpx<0.24" && \
     pip install -r requirements.txt
-
+    
 # -------- Runtime image ----------
 FROM python:3.10-slim
 
