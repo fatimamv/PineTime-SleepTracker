@@ -34,7 +34,7 @@ RUN python -m venv /opt/venv && \
     pip install pandas==2.1.4 scipy==1.10.1 scikit-learn==1.3.2 && \
     pip install pyActigraphy==1.2.2 --no-deps && \
     pip install pyhrv==0.4.1 neurokit2==0.2.7 && \
-    pip install fastapi==0.110.0 uvicorn==0.29.0 supabase==2.3.2 && \
+    pip install fastapi==0.110.0 uvicorn==0.29.0 && \
     pip install lmfit && \
     pip install statsmodels==0.13.5 && \
     pip install numba==0.56.4 && \
@@ -44,7 +44,9 @@ RUN python -m venv /opt/venv && \
     pip install matplotlib seaborn && \
     pip install peakutils && \
     pip install git+https://github.com/0todd0000/spm1d.git && \
-    pip install pyexcel 
+    pip install pyexcel && \
+    pip install supabase==2.3.2 && \
+    pip install "httpx<0.24"
 
 # -------- Runtime image ----------
 FROM python:3.10-slim
