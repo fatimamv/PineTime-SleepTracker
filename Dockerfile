@@ -31,8 +31,10 @@ RUN python -m venv /opt/venv && \
     . /opt/venv/bin/activate && \
     pip install --upgrade pip setuptools wheel && \
     pip install cython && \
+    pip install "httpx<0.24" && \
+    pip install supabase==2.3.2 && \
     pip install -r requirements.txt
-    
+
 # -------- Runtime image ----------
 FROM python:3.10-slim
 
