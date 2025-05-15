@@ -1,12 +1,16 @@
+import os
 from fastapi import FastAPI
 from pydantic import BaseModel
-import os
-from supabase import create_client
+from postgrest import AsyncPostgrestClient
 from .main import process_sleep_record
 
-url = os.getenv("SUPABASE_URL")
-key = os.getenv("SUPABASE_SERVICE_KEY")
-supabase = create_client(url, key)
+URL = os.getenv("SUPABASE_URL") + "/rest/v1/"
+KEY = os.getenv("SUPABASE_SERVICE_KEY")
+supabase = AsyncPostgrestClient(URL, headers={
+    "apikey": KEY,
+    "Authorization": f"Bearer {KEY}"
+})
+supabase.auth(KEY)
 
 class Payload(BaseModel):
     sleep_record_id: int
@@ -14,6 +18,6 @@ class Payload(BaseModel):
 app = FastAPI()
 
 @app.post("/compute")
-def compute(payload: Payload):
-    process_sleep_record(payload.sleep_record_id, supabase)
+async def compute(payload: Payload):
+    await process_sleep_record(payload.sleep_record_id, supabase)
     return {"status": "ok"}
