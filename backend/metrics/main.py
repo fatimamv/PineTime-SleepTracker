@@ -21,16 +21,28 @@ async def process_sleep_record(rec_id: int, supabase: AsyncPostgrestClient):
     df["ts"] = pd.to_datetime(df["captured_at"])
 
     # 2) Acelerómetro → actividad en bins de 60 s
-    accel = (df[df.sensor_type == "accelerometer"]
-                .assign(x=lambda d: d.value.map(lambda v: json.loads(v)["x"]))
-                .set_index("ts").x.resample("60s").mean().fillna(0.0))
+    accel_raw = df[df.sensor_type == "accelerometer"]
+    if accel_raw.empty:
+        print("There is no accelerometer data for this record.")
+        return
+
+    # Extraer eje x o magnitud del movimiento
+    accel = (accel_raw
+            .assign(x=lambda d: d.value.map(lambda v: json.loads(v).get("x", 0)))
+            .set_index("ts").x.resample("60s").mean().fillna(0.0))
     vals = accel.to_numpy()
 
-    # 3) Cole-Kripke: convolución + umbral
-    #    usamos 'same' para que tenga la misma longitud y timestamp
+    if len(vals) < len(_CK_WEIGHTS):
+        print(f"Not enough data to apply Cole-Kripke: {len(vals)} values.")
+        return
+
+    print(f"Accelerometer bins (60s): {len(accel)} values")
+
+    # Convolución + umbral
     scores = np.convolve(vals, _CK_WEIGHTS, mode="same")
-    # sleep=1 si score < umbral
     sleep_wake = pd.Series((scores < _CK_THRESHOLD).astype(int), index=accel.index)
+
+    print(f"Scores (Cole-Kripke): {len(scores)} values")
 
     # 4) Métricas de sueño
     sol_seconds   = int((sleep_wake.idxmax() - sleep_wake.index[0]).total_seconds())
@@ -42,14 +54,29 @@ async def process_sleep_record(rec_id: int, supabase: AsyncPostgrestClient):
             .assign(hr=lambda d: d.value.map(lambda v: json.loads(v)["heartRate"]))
             .set_index("ts").hr.resample("1s").ffill())
     ibi = 60000.0 / hr
-    hrv = nk.hrv_time(ibi.dropna().to_numpy(), sampling_rate=1)
+    rri = ibi.dropna().to_numpy()
+    peaks = nk.intervals_to_peaks(rri, sampling_rate=1)
+    hrv = nk.hrv_time(peaks=peaks, sampling_rate=1)
 
-    # 6) Guardar métricas
-    await supabase.from_("sleep_metrics").upsert({
-        "sleep_record_id":       rec_id,
-        "sol_seconds":           sol_seconds,
-        "waso_minutes":          waso_minutes,
-        "fragmentation_index":   frag_index,
-        "hrv_rmssd":             float(hrv["HRV_RMSSD"]),
-        "hrv_sdnn":              float(hrv["HRV_SDNN"]),
-    }).execute()
+    rmssd = float(hrv["HRV_RMSSD"].item())
+    sdnn = float(hrv["HRV_SDNN"].item())
+
+    print(f"SOL: {sol_seconds}s, WASO: {waso_minutes}min, Frag: {frag_index}")
+    print(f"HRV_RMSSD: {hrv['HRV_RMSSD']}, HRV_SDNN: {hrv['HRV_SDNN']}")
+
+    if any(pd.isna(x) for x in [sol_seconds, waso_minutes, frag_index, rmssd, sdnn]):
+        print("❌ There is at least one metric in NaN. It will not be inserted.")
+        return
+
+    metrics = {
+        "sleep_record_id": rec_id,
+        "sol_seconds": sol_seconds,
+        "waso_minutes": waso_minutes,
+        "fragmentation_index": frag_index,
+        "hrv_rmssd": rmssd,
+        "hrv_sdnn": sdnn,
+    }
+
+    print("Inserting metrics:", metrics)
+
+    await supabase.from_("sleep_metrics").insert(metrics).execute()
