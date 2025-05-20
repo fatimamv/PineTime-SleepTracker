@@ -9,7 +9,7 @@ from postgrest import AsyncPostgrestClient
 
 # Cole-Kripke weights (original paper):
 _CK_WEIGHTS = np.array([0.0004, 0.004, 0.02, 0.1, 0.02, 0.004, 0.0004])
-_CK_THRESHOLD = 1.0
+_CK_THRESHOLD = 0.3
 
 async def process_sleep_record(rec_id: int, supabase: AsyncPostgrestClient):
     # 1) Leer datos crudos
@@ -28,8 +28,8 @@ async def process_sleep_record(rec_id: int, supabase: AsyncPostgrestClient):
 
     # Extraer eje x o magnitud del movimiento
     accel = (accel_raw
-            .assign(x=lambda d: d.value.map(lambda v: json.loads(v).get("x", 0)))
-            .set_index("ts").x.resample("60s").mean().fillna(0.0))
+            .assign(magnitude=lambda d: d.value.map(lambda v: np.sqrt(sum([json.loads(v).get(k, 0)**2 for k in ['x', 'y', 'z']]))))
+            .set_index("ts").magnitude.resample("60s").mean().fillna(0.0))
     vals = accel.to_numpy()
 
     if len(vals) < len(_CK_WEIGHTS):
@@ -43,6 +43,9 @@ async def process_sleep_record(rec_id: int, supabase: AsyncPostgrestClient):
     sleep_wake = pd.Series((scores < _CK_THRESHOLD).astype(int), index=accel.index)
 
     print(f"Scores (Cole-Kripke): {len(scores)} values")
+    print("CK Score stats:", scores.min(), scores.max())
+    print("Sleep wake counts:", sleep_wake.value_counts())
+    print("Cole-Kripke scores:", scores[:10])  # muestra los primeros 10
 
     # 4) Métricas de sueño
     sol_seconds   = int((sleep_wake.idxmax() - sleep_wake.index[0]).total_seconds())
@@ -54,7 +57,10 @@ async def process_sleep_record(rec_id: int, supabase: AsyncPostgrestClient):
             .assign(hr=lambda d: d.value.map(lambda v: json.loads(v)["heartRate"]))
             .set_index("ts").hr.resample("1s").ffill())
     ibi = 60000.0 / hr
-    rri = ibi.dropna().to_numpy()
+    rri = pd.to_numeric(ibi.dropna(), errors="coerce").dropna().to_numpy()
+    if not np.issubdtype(rri.dtype, np.number) or len(rri) < 3:
+        print("❌ Invalid or too short RRI:", rri)
+        return
     peaks = nk.intervals_to_peaks(rri, sampling_rate=1)
     hrv = nk.hrv_time(peaks=peaks, sampling_rate=1)
 
@@ -64,17 +70,19 @@ async def process_sleep_record(rec_id: int, supabase: AsyncPostgrestClient):
     print(f"SOL: {sol_seconds}s, WASO: {waso_minutes}min, Frag: {frag_index}")
     print(f"HRV_RMSSD: {hrv['HRV_RMSSD']}, HRV_SDNN: {hrv['HRV_SDNN']}")
 
-    if any(pd.isna(x) for x in [sol_seconds, waso_minutes, frag_index, rmssd, sdnn]):
-        print("❌ There is at least one metric in NaN. It will not be inserted.")
-        return
+    def safe_float(val):
+        try:
+            return float(val.item()) if hasattr(val, "item") else float(val)
+        except Exception:
+            return None 
 
     metrics = {
         "sleep_record_id": rec_id,
-        "sol_seconds": sol_seconds,
-        "waso_minutes": waso_minutes,
-        "fragmentation_index": frag_index,
-        "hrv_rmssd": rmssd,
-        "hrv_sdnn": sdnn,
+        "sol_seconds": int(sol_seconds) if pd.notna(sol_seconds) else None,
+        "waso_minutes": int(waso_minutes) if pd.notna(waso_minutes) else None,
+        "fragmentation_index": float(frag_index) if pd.notna(frag_index) else None,
+        "hrv_rmssd": safe_float(hrv["HRV_RMSSD"]),
+        "hrv_sdnn": safe_float(hrv["HRV_SDNN"]),
     }
 
     print("Inserting metrics:", metrics)
