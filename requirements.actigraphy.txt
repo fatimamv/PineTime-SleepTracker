@@ -1,5 +1,3 @@
-numpy==1.22.4          
-scikit-learn          
 pyhrv==0.4.1
 neurokit2==0.2.4
 pyActigraphy==1.2.1
@@ -7,4 +5,4 @@ pandas==1.3.5
 uvicorn
 fastapi
 postgrest-py
-peakutils==1.3.4      
+peakutils

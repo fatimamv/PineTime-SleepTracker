@@ -12,7 +12,9 @@ WORKDIR /app
 COPY requirements.actigraphy.txt .
 
 RUN pip install --upgrade pip && \
-    pip install numpy==1.22.4
+  pip install numpy==1.22.4 scipy==1.8.1
+
+RUN pip install --only-binary=:all: scikit-learn==1.0.2
 
 RUN pip install Cython==0.29.32
 
