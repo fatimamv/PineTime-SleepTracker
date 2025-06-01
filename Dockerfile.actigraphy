@@ -11,14 +11,8 @@ WORKDIR /app
 
 COPY requirements.actigraphy.txt .
 
-# Instala pip, numpy y scipy primero
-RUN pip install --upgrade pip && \
-pip install numpy==1.22.4 scipy==1.8.1
+RUN pip install --upgrade pip && pip install Cython==0.29.32
 
-# Instala Cython para que scikit-learn pueda compilarse
-RUN pip install Cython==0.29.32
-
-# Luego instala el resto
 RUN pip install --prefer-binary --no-build-isolation --no-use-pep517 \
     -r requirements.actigraphy.txt
 
