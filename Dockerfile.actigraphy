@@ -13,8 +13,7 @@ COPY requirements.actigraphy.txt .
 
 RUN pip install --upgrade pip && pip install Cython==0.29.32
 
-RUN pip install --prefer-binary --no-build-isolation --no-use-pep517 \
-    -r requirements.actigraphy.txt
+RUN pip install --prefer-binary -r requirements.actigraphy.txt
 
 COPY . .
 
