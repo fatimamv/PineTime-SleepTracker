@@ -155,5 +155,10 @@ async def process_sleep_record(rec_id: int, supabase: AsyncPostgrestClient):
             "end_time": stages.index[-1]
         })
 
+    # Convertir Timestamps a ISO strings para Supabase
+    for result in results:
+        result["start_time"] = result["start_time"].isoformat()
+        result["end_time"] = result["end_time"].isoformat()
+
     print("Inserting sleep stages:", results[:3])
     await supabase.from_("sleep_stages").insert(results).execute()
