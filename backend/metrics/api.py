@@ -6,7 +6,6 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from postgrest import AsyncPostgrestClient
 from .main import process_sleep_record
-from .sleep_stages import estimate_sleep_stages 
 
 URL = os.getenv("SUPABASE_URL") + "/rest/v1/"
 KEY = os.getenv("SUPABASE_SERVICE_KEY")
