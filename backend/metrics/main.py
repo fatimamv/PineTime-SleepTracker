@@ -94,7 +94,13 @@ async def process_sleep_record(rec_id: int, supabase: AsyncPostgrestClient):
         print("No HR data or HR length mismatch, skipping sleep stage estimation.")
         return
 
-    hr_aligned = hr.reindex(sleep_wake.index).fillna(method="ffill")
+    # Asegúrate de que ambos índices estén ordenados
+    hr = hr.sort_index()
+    sleep_wake = sleep_wake.sort_index()
+
+    # Alinea tomando el valor más cercano
+    hr_aligned = hr.reindex(sleep_wake.index, method="nearest", tolerance=pd.Timedelta("30s"))
+
     percentiles = np.percentile(hr_aligned.values, [25, 50])
 
     def classify_stage(row):
