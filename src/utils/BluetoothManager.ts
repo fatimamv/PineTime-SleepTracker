@@ -150,7 +150,7 @@ export const startCollection = async (opts: {
   userId: number;
   accelEveryMs: number;
   hrEveryMs: number;
-}): Promise<{ subscriptions: { accel: Subscription; hr: Subscription }; cleanup: () => void }> => {
+}): Promise<{ subscriptions: { accel: Subscription; hr: Subscription }; cleanup: () => void; sleepRecordId: number }> => {
   const { device, userId, accelEveryMs, hrEveryMs } = opts;
   log('Starting collection for user', userId);
 
@@ -228,5 +228,5 @@ export const startCollection = async (opts: {
     clearInterval(keepAlive);
   };
 
-  return { subscriptions: { accel: accelSub, hr: hrSub }, cleanup };
+  return { subscriptions: { accel: accelSub, hr: hrSub }, cleanup, sleepRecordId };
 };

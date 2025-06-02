@@ -24,6 +24,7 @@ const HomeScreen: ScreenComponent = () => {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isNewUser, setIsNewUser] = useState(false);
   const [newUserName, setNewUserName] = useState('');
+  const [sleepRecordId, setSleepRecordId] = useState<number | null>(null);
   const { connectedDevice, setConnectedDevice } = useBluetooth();
   const collectionSubscriptions = useRef<{ accel: Subscription | null; hr: Subscription | null }>({
     accel: null,
@@ -123,17 +124,16 @@ const HomeScreen: ScreenComponent = () => {
     }
   
     try {
-        const { subscriptions, cleanup } = await startCollection({
+      const { subscriptions, cleanup, sleepRecordId } = await startCollection({
         device: connectedDevice,
         userId,
         accelEveryMs: accelFreqMs,
         hrEveryMs: hrFreqMs,
       });
-  
-      // guarda refs para poder detener todo después
       collectionSubscriptions.current = subscriptions;
       cleanupRef.current = cleanup;
       setIsCollecting(true);
+      setSleepRecordId(sleepRecordId); 
     } catch (e: any) {
       console.error('❌ startCollection falló', e);
       const msg =
@@ -143,7 +143,7 @@ const HomeScreen: ScreenComponent = () => {
   };
   
 
-  const stopDataCollection = () => {
+  async function stopDataCollection() {
     console.log('🛑 Stopping data collection...');
     collectionSubscriptions.current.accel?.remove();
     collectionSubscriptions.current.hr?.remove();
@@ -151,6 +151,31 @@ const HomeScreen: ScreenComponent = () => {
     collectionSubscriptions.current = { accel: null, hr: null };
     cleanupRef.current = null;
     setIsCollecting(false);
+    if (sleepRecordId) {
+      try {
+        // 1. Actualiza ended_at
+        const { error: updateError } = await supabase
+          .from('sleep_records')
+          .update({ ended_at: new Date().toISOString() })
+          .eq('id', sleepRecordId);
+        if (updateError) {
+          console.error('❌ Error updating ended_at:', updateError.message);
+        } else {
+          console.log('🕓 ended_at actualizado para sleep_record_id:', sleepRecordId);
+        }
+    
+        // 2. Llama al backend
+        const res = await fetch('http://192.168.1.2:8000/compute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sleep_record_id: sleepRecordId }),
+        });
+        const json = await res.json();
+        console.log('✅ Backend response:', json);
+      } catch (err) {
+        console.error('💥 Error al calcular métricas:', err);
+      }
+    }
   };
 
   return (
