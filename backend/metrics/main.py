@@ -97,15 +97,6 @@ async def process_sleep_record(rec_id: int, supabase: AsyncPostgrestClient):
         print("No HR data, skipping sleep stage estimation.")
         return
 
-    hr = hr.sort_index()
-    sleep_wake = sleep_wake.sort_index()
-    hr_aligned = hr.reindex(sleep_wake.index, method="nearest", tolerance=pd.Timedelta("30s"))
-
-    if hr_aligned.isna().any():
-        print("Some HR values couldn't be aligned within tolerance.")
-        return
-
-
     # Asegúrate de que ambos índices estén ordenados
     hr = hr.sort_index()
     sleep_wake = sleep_wake.sort_index()
