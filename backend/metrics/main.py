@@ -88,3 +88,77 @@ async def process_sleep_record(rec_id: int, supabase: AsyncPostgrestClient):
     print("Inserting metrics:", metrics)
 
     await supabase.from_("sleep_metrics").insert(metrics).execute()
+
+    print("HR length:", len(hr))
+    print("Sleep wake length:", len(sleep_wake))
+
+        # 6) Estimación de etapas de sueño: wake, light, deep
+    if hr.empty:
+        print("No HR data, skipping sleep stage estimation.")
+        return
+
+    # Asegúrate de que ambos índices estén ordenados
+    hr = hr.sort_index()
+    sleep_wake = sleep_wake.sort_index()
+
+    # Alinear ritmo cardiaco a los timestamps del acelerómetro
+    hr_aligned = hr.reindex(sleep_wake.index, method="nearest", tolerance=pd.Timedelta("30s"))
+
+    # Eliminar los que no se pudieron alinear
+    valid_idx = hr_aligned.dropna().index
+    hr_aligned = hr_aligned.loc[valid_idx]
+    sleep_wake_valid = sleep_wake.loc[valid_idx]
+
+    print(f"HR length after alignment: {len(hr_aligned)}")
+    print(f"Sleep wake length after filtering: {len(sleep_wake_valid)}")
+
+    # Percentiles para clasificar en deep/light
+    percentiles = np.percentile(hr_aligned.values, [25, 50])
+
+    def classify_stage(ts, value):
+        awake = sleep_wake_valid.loc[ts] == 0
+        if awake:
+            return "wake"
+        elif value < percentiles[0]:
+            return "deep"
+        else:
+            return "light"
+
+
+    stages = pd.Series(
+        [classify_stage(ts, val) for ts, val in hr_aligned.items()],
+        index=hr_aligned.index
+    )
+
+    # Convert to list of intervals
+    results = []
+    current_stage = None
+    start_time = None
+    for ts, stage in stages.items():
+        if stage != current_stage:
+            if current_stage is not None:
+                results.append({
+                    "sleep_record_id": rec_id,
+                    "stage": current_stage,
+                    "start_time": start_time,
+                    "end_time": ts
+                })
+            current_stage = stage
+            start_time = ts
+
+    # Cierra último segmento
+    if current_stage is not None and start_time is not None:
+        results.append({
+            "sleep_record_id": rec_id,
+            "stage": current_stage,
+            "start_time": start_time,
+            "end_time": stages.index[-1]
+        })
+
+    # Convertir Timestamps a ISO strings para Supabase
+    for result in results:
+        result["start_time"] = result["start_time"].isoformat()
+        result["end_time"] = result["end_time"].isoformat()
+
+    print("Inserting sleep stages:", results[:3])
+    await supabase.from_("sleep_stages").insert(results).execute()
