@@ -115,16 +115,20 @@ async def process_sleep_record(rec_id: int, supabase: AsyncPostgrestClient):
     # Percentiles para clasificar en deep/light
     percentiles = np.percentile(hr_aligned.values, [25, 50])
 
-    def classify_stage(row):
-        awake = sleep_wake_valid.loc[row.name] == 0
+    def classify_stage(ts, value):
+        awake = sleep_wake_valid.loc[ts] == 0
         if awake:
             return "wake"
-        elif row < percentiles[0]:
+        elif value < percentiles[0]:
             return "deep"
         else:
             return "light"
 
-    stages = hr_aligned.apply(classify_stage)
+
+    stages = pd.Series(
+        [classify_stage(ts, val) for ts, val in hr_aligned.items()],
+        index=hr_aligned.index
+    )
 
     # Convert to list of intervals
     results = []
