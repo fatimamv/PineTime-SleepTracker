@@ -88,3 +88,50 @@ async def process_sleep_record(rec_id: int, supabase: AsyncPostgrestClient):
     print("Inserting metrics:", metrics)
 
     await supabase.from_("sleep_metrics").insert(metrics).execute()
+
+        # 6) Estimación de etapas de sueño: wake, light, deep
+    if hr.empty or len(hr) != len(sleep_wake):
+        print("No HR data or HR length mismatch, skipping sleep stage estimation.")
+        return
+
+    hr_aligned = hr.reindex(sleep_wake.index).fillna(method="ffill")
+    percentiles = np.percentile(hr_aligned.values, [25, 50])
+
+    def classify_stage(row):
+        awake = sleep_wake.loc[row.name] == 0
+        if awake:
+            return "wake"
+        elif row < percentiles[0]:
+            return "deep"
+        else:
+            return "light"
+
+    stages = hr_aligned.apply(classify_stage)
+
+    # Convert to list of intervals
+    results = []
+    current_stage = None
+    start_time = None
+    for ts, stage in stages.items():
+        if stage != current_stage:
+            if current_stage is not None:
+                results.append({
+                    "sleep_record_id": rec_id,
+                    "stage": current_stage,
+                    "start_time": start_time,
+                    "end_time": ts
+                })
+            current_stage = stage
+            start_time = ts
+
+    # Cierra último segmento
+    if current_stage is not None and start_time is not None:
+        results.append({
+            "sleep_record_id": rec_id,
+            "stage": current_stage,
+            "start_time": start_time,
+            "end_time": stages.index[-1]
+        })
+
+    print("Inserting sleep stages:", results[:3])
+    await supabase.from_("sleep_stages").insert(results).execute()
