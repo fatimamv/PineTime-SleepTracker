@@ -110,13 +110,22 @@ async def process_sleep_record(rec_id: int, supabase: AsyncPostgrestClient):
     hr = hr.sort_index()
     sleep_wake = sleep_wake.sort_index()
 
-    # Alinea tomando el valor más cercano
+    # Alinear ritmo cardiaco a los timestamps del acelerómetro
     hr_aligned = hr.reindex(sleep_wake.index, method="nearest", tolerance=pd.Timedelta("30s"))
 
+    # Eliminar los que no se pudieron alinear
+    valid_idx = hr_aligned.dropna().index
+    hr_aligned = hr_aligned.loc[valid_idx]
+    sleep_wake_valid = sleep_wake.loc[valid_idx]
+
+    print(f"HR length after alignment: {len(hr_aligned)}")
+    print(f"Sleep wake length after filtering: {len(sleep_wake_valid)}")
+
+    # Percentiles para clasificar en deep/light
     percentiles = np.percentile(hr_aligned.values, [25, 50])
 
     def classify_stage(row):
-        awake = sleep_wake.loc[row.name] == 0
+        awake = sleep_wake_valid.loc[row.name] == 0
         if awake:
             return "wake"
         elif row < percentiles[0]:
