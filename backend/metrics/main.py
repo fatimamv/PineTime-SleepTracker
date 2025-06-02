@@ -89,10 +89,22 @@ async def process_sleep_record(rec_id: int, supabase: AsyncPostgrestClient):
 
     await supabase.from_("sleep_metrics").insert(metrics).execute()
 
+    print("HR length:", len(hr))
+    print("Sleep wake length:", len(sleep_wake))
+
         # 6) Estimación de etapas de sueño: wake, light, deep
-    if hr.empty or len(hr) != len(sleep_wake):
-        print("No HR data or HR length mismatch, skipping sleep stage estimation.")
+    if hr.empty:
+        print("No HR data, skipping sleep stage estimation.")
         return
+
+    hr = hr.sort_index()
+    sleep_wake = sleep_wake.sort_index()
+    hr_aligned = hr.reindex(sleep_wake.index, method="nearest", tolerance=pd.Timedelta("30s"))
+
+    if hr_aligned.isna().any():
+        print("Some HR values couldn't be aligned within tolerance.")
+        return
+
 
     # Asegúrate de que ambos índices estén ordenados
     hr = hr.sort_index()
