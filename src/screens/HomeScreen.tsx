@@ -165,7 +165,7 @@ const HomeScreen: ScreenComponent = () => {
         }
     
         // 2. Llama al backend
-        const res = await fetch('https://0346-2001-7c7-1180-821-3537-d759-4fcb-fe1a.ngrok-free.app/compute', {
+        const res = await fetch('https://d2df-2001-7c7-1180-821-70ae-4e9e-86a7-7fc8.ngrok-free.app/compute', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sleep_record_id: sleepRecordId }),
