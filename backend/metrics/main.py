@@ -61,6 +61,11 @@ async def process_sleep_record(rec_id: int, supabase: AsyncPostgrestClient):
     if not np.issubdtype(rri.dtype, np.number) or len(rri) < 3:
         print("❌ Invalid or too short RRI:", rri)
         return
+    
+    rri = [x for x in rri if np.isfinite(x) and x > 300 and x < 2000]  # filtra valores extremos y absurdos
+    if len(rri) < 3:
+        print("Not enough valid RRI values after filtering.")
+        return
     peaks = nk.intervals_to_peaks(rri, sampling_rate=1)
     hrv = nk.hrv_time(peaks=peaks, sampling_rate=1)
 
