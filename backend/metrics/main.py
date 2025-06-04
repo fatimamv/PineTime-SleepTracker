@@ -41,11 +41,13 @@ async def process_sleep_record(rec_id: int, supabase: AsyncPostgrestClient):
     # Convolución + umbral
     scores = np.convolve(vals, _CK_WEIGHTS, mode="same")
     sleep_wake = pd.Series((scores < _CK_THRESHOLD).astype(int), index=accel.index)
+    tst_minutes = int((sleep_wake == 1).sum())
 
     print(f"Scores (Cole-Kripke): {len(scores)} values")
     print("CK Score stats:", scores.min(), scores.max())
     print("Sleep wake counts:", sleep_wake.value_counts())
     print("Cole-Kripke scores:", scores[:10])  # muestra los primeros 10
+    print(f"TST: {tst_minutes} minutes")
 
     # 4) Métricas de sueño
     sol_seconds   = int((sleep_wake.idxmax() - sleep_wake.index[0]).total_seconds())
@@ -88,6 +90,7 @@ async def process_sleep_record(rec_id: int, supabase: AsyncPostgrestClient):
         "fragmentation_index": float(frag_index) if pd.notna(frag_index) else None,
         "hrv_rmssd": safe_float(hrv["HRV_RMSSD"]),
         "hrv_sdnn": safe_float(hrv["HRV_SDNN"]),
+        "total_sleep_time": int(tst_minutes) if pd.notna(tst_minutes) else None,
     }
 
     print("Inserting metrics:", metrics)
