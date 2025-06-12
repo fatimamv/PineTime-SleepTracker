@@ -1,11 +1,19 @@
 import { StyleSheet } from 'react-native';
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, COMMON_STYLES } from '../constants/theme';
 
 const styles = StyleSheet.create({
-  subHeader: { fontSize: 18, fontWeight: '500', marginTop: 20, marginBottom: 10 },
+  subHeader: { fontSize: 20, fontWeight: '300', marginTop: 45, marginBottom: 20 },
   rowContainer: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 },
   label: { fontSize: 16, fontWeight: '600' },
-	header: { fontSize: 28, fontWeight: 'bold', marginBottom: 20 },
-  metricRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+	header: { 
+    fontSize: 24, 
+    fontWeight: 'bold', 
+    marginBottom: 20,
+    alignSelf: 'flex-start',
+    width: '100%'
+  },
+  metricRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, marginTop: 10 },
+  collectingLabel: { flex: 0, fontSize: 16, fontWeight: '600' },
   metricLabel: { flex: 1, fontSize: 16 },
   freqInput: {
   width: 60,
@@ -17,19 +25,6 @@ const styles = StyleSheet.create({
 		marginHorizontal: 8,
 	},
 	unit: { fontSize: 16 },
-	saveButton: {
-		backgroundColor: '#4CBAE6',
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginVertical: 20,
-		padding: 20,
-	},
-	saveButtonText: {
-		color: '#fff',
-		fontSize: 16,
-		fontWeight: '600',
-	},
 	deviceItem: {
 		padding: 10,
 		borderBottomWidth: 1,
@@ -47,10 +42,25 @@ const styles = StyleSheet.create({
 	},
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
     backgroundColor: '#fff',
-		padding: 40,
+  },
+  connectionBanner: {
+    backgroundColor: '#FF1B1C',
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: SPACING.md,
+    gap: SPACING.sm,
+  },
+  connectionBannerText: {
+    color: '#fff',
+    fontSize: FONT_SIZE.sm,
+    flex: 1,
+  },
+  connectionMessage: {
+    color: '#FF1B1C',
+    fontSize: FONT_SIZE.sm,
+    textAlign: 'center',
+    marginTop: SPACING.sm,
   },
   content: {
     flex: 1,
@@ -59,8 +69,8 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 20,
+    fontWeight: 'regular',
+    marginBottom: 0,
   },
   statusContainer: {
     padding: 15,
@@ -80,7 +90,7 @@ const styles = StyleSheet.create({
     color: '#C62828',
   },
   button: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#4CBAE6',
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 8,
@@ -89,16 +99,23 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
     shadowRadius: 2,
+    alignSelf: 'center',
   },
   buttonDisabled: {
-    backgroundColor: '#BDBDBD',
-    elevation: 0,
+    borderColor: '#D5D2D2',
+    backgroundColor: 'transparent',
+    borderWidth: 1,
     shadowOpacity: 0,
+    elevation: 0,
   },
   buttonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: 'Roboto',
+  },
+  buttonTextDisabled: {
+    color: '#D5D2D2',
   },
   modalContainer: {
     flex: 1,
@@ -125,13 +142,13 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   input: {
-    width: '100%',
+    width: 80,
+    height: 36,
     borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 20,
-    fontFamily: 'Roboto',
+    borderColor: COLORS.border,
+    borderRadius: BORDER_RADIUS.sm,
+    padding: SPACING.xs,
+    textAlign: 'center',
   },
   buttonPrimary: {
     backgroundColor: '#4CBAE6',
@@ -155,6 +172,149 @@ const styles = StyleSheet.create({
   bottomButtonContainer: {
     paddingBottom: 40,
     alignItems: 'center',
+  },
+  contentContainer: {
+    padding: SPACING.lg,
+  },
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    width: '100%',
+  },
+  recordInput: {
+    alignItems: 'flex-end',
+    gap: SPACING.sm,
+  },
+  recordLabel: {
+    fontSize: FONT_SIZE.md,
+    color: COLORS.text.primary,
+    verticalAlign: 'middle',
+    marginRight: 10,
+  },
+  categoryButtons: {
+    ...COMMON_STYLES.row,
+    flexWrap: 'wrap', 
+    gap: SPACING.sm,
+    justifyContent: 'center',
+    marginBottom: SPACING.md,
+  },
+  categoryButton: {
+    padding: SPACING.sm,
+    borderRadius: BORDER_RADIUS.sm,
+    backgroundColor: COLORS.secondary,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  categoryButtonSelected: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  categoryButtonDisabled: {
+    borderColor: '#D5D2D2',
+    backgroundColor: 'transparent',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  categoryText: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.text.primary,
+  },
+  categoryTextSelected: {
+    color: COLORS.text.light,
+  },
+  categoryTextDisabled: {
+    color: '#D5D2D2',
+  },
+  chartContainer: {
+    height: 300,
+    ...COMMON_STYLES.card,
+    marginBottom: SPACING.md,
+    width: '100%',
+    overflow: 'hidden',
+  },
+  tallChartContainer: {
+    height: 350,
+  },
+  chartHeader: {
+    ...COMMON_STYLES.row,
+    justifyContent: 'space-between',
+    marginBottom: SPACING.sm,
+    padding: SPACING.sm,
+  },
+  chartTitle: {
+    ...COMMON_STYLES.subtitle,
+  },
+  showDataButton: {
+    ...COMMON_STYLES.button,
+  },
+  showDataButtonText: {
+    ...COMMON_STYLES.buttonText,
+  },
+  modalTableContainer: {
+    backgroundColor: '#fff',
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    marginBottom: SPACING.md,
+    padding: SPACING.sm,
+  },
+  modalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  modalHeaderCell: {
+    flex: 1,
+    fontWeight: 'bold',
+    fontFamily: 'Roboto',
+    color: COLORS.text.primary,
+    textAlign: 'center',
+  },
+  modalCell: {
+    flex: 1,
+    fontFamily: 'Roboto',
+    color: COLORS.text.primary,
+    textAlign: 'center',
+  },
+  modalInfoText: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.text.secondary,
+    fontFamily: 'Roboto',
+    lineHeight: 20,
+  },
+  modalBoldText: {
+    fontWeight: 'bold',
+    color: COLORS.text.primary,
+  },
+  modalSectionTitle: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: 'bold',
+    fontFamily: 'Roboto',
+    color: COLORS.text.primary,
+    marginTop: SPACING.md,
+    marginBottom: SPACING.sm,
+  },
+  dateContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    fontSize: FONT_SIZE.sm,
+  },
+  dateIcon: {
+    marginRight: SPACING.xs,
+  },
+  chartScrollContent: {
+    flexGrow: 1,
+    paddingRight: SPACING.md,
+  },
+  chartWrapper: {
+    flex: 1,
+    minWidth: '100%',
+    marginLeft: -SPACING.md,
+    height: 250,
   },
 });
 

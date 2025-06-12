@@ -28,13 +28,7 @@ export default function App() {
               borderTopWidth: 1,
               borderTopColor: '#E5E5EA',
             },
-            headerStyle: {
-              backgroundColor: '#fff',
-            },
-            headerTintColor: '#000',
-            headerTitleStyle: {
-              fontWeight: 'bold',
-            },
+            headerShown: false,
             }}
           >
             <Tab.Screen 

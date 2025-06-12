@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import { useConfig } from '../context/ConfigContext';
 import manager from '../utils/BluetoothManager';
 import type { Device } from 'react-native-ble-plx';
 import styles from './styles';
+
 const ConfigurationScreen = () => {
   const { connectedDevice, setConnectedDevice } = useBluetooth();
   const { accelFrequency, hrFrequency, setConfig } = useConfig();
@@ -69,14 +70,14 @@ const ConfigurationScreen = () => {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.header}>Configuration</Text>
+    <ScrollView contentContainerStyle={[styles.container, styles.contentContainer]}>
+      <Text style={styles.title}>Configuration</Text>
 
       <Text style={styles.subHeader}>Collecting configuration</Text>
 
       <View style={styles.rowContainer}>
-        <Text style={styles.label}>Metrics:</Text>
-        <Text style={styles.label}>Frequency:</Text>
+        <Text style={[styles.metricLabel, { fontWeight:600 }]}>Metrics:</Text>
+        <Text style={styles.collectingLabel}>Frequency:</Text>
       </View>
 
       <View style={styles.metricRow}>
@@ -101,8 +102,8 @@ const ConfigurationScreen = () => {
         <Text style={styles.unit}>s</Text>
       </View>
 
-      <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-        <Text style={styles.saveButtonText}>Save configuration</Text>
+      <TouchableOpacity style={[styles.button, { marginTop: 20 }]} onPress={handleSave}>
+        <Text style={styles.buttonText}>Save configuration</Text>
       </TouchableOpacity>
 
       <Text style={styles.subHeader}>Bluetooth Connection</Text>

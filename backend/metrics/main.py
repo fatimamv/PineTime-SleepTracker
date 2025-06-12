@@ -50,6 +50,19 @@ async def process_sleep_record(rec_id: int, supabase: AsyncPostgrestClient):
                 is_valid = True
                 scores = np.convolve(vals, _CK_WEIGHTS, mode="same")
                 sleep_wake = pd.Series((scores < _CK_THRESHOLD).astype(int), index=accel.index)
+
+                classification_data = [
+                    {
+                        "sleep_record_id": rec_id,
+                        "timestamp": ts.isoformat(),
+                        "state": int(state)
+                    }
+                    for ts, state in sleep_wake.items()
+                ]
+
+                await supabase.from_("sleep_classification").insert(classification_data).execute()
+                print("Inserted Cole-Kripke sleep classification.")
+
                 tst_minutes = int((sleep_wake == 1).sum())
 
                 print(f"Scores (Cole-Kripke): {len(scores)} values")

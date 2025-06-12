@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Alert, PermissionsAndroid, Platform, TouchableOpacity, Modal, Button, TextInput } from 'react-native';
+import { View, Text, Alert, PermissionsAndroid, Platform, TouchableOpacity, Modal, Button, TextInput } from 'react-native';
 import { ScreenComponent } from './types';
 import { ensurePineTime, startCollection } from '../utils/BluetoothManager';
 import { supabase } from '../api/supabaseClient';
@@ -10,6 +10,7 @@ import { useRef } from 'react';
 import { Subscription } from 'react-native-ble-plx'; 
 import { useConfig } from '../context/ConfigContext';
 import styles from './styles';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 interface User {
   id: number;
@@ -180,31 +181,39 @@ const HomeScreen: ScreenComponent = () => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.content}>
-        <Text style={styles.title}>PineTime Data</Text>
-        <View style={[styles.statusContainer, !isConnected && styles.statusContainerNotConnected]}>
-          <Text style={[styles.status, !isConnected && styles.statusNotConnected]}>
-            {isConnected ? 'Connected to PineTime' : 'PineTime device not connected'}
+      {!isConnected && (
+        <View style={styles.connectionBanner}>
+          <Icon name="watch-variant" size={35} color="#fff" />
+          <Text style={styles.connectionBannerText}>
+            Your PineTime is not connected to your device. Check your Bluetooth configuration.
           </Text>
         </View>
+      )}
+      <View style={styles.content}>
+        <Text style={styles.subHeader}></Text>
       </View>
       
       <View style={styles.bottomButtonContainer}>
-      <TouchableOpacity
-        style={[styles.button, !isConnected && styles.buttonDisabled]}
-        onPress={async () => {
-          if (isCollecting) {
-            stopDataCollection();
-          } else {
-            setIsModalVisible(true);
-          }
-        }}
-        disabled={!connectedDevice}
-      >
-        <Text style={styles.buttonText}>
-          {isCollecting ? 'Stop Data Collection' : 'Start Data Collection'}
-        </Text>
-      </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.button, !isConnected && styles.buttonDisabled]}
+          onPress={async () => {
+            if (isCollecting) {
+              stopDataCollection();
+            } else {
+              setIsModalVisible(true);
+            }
+          }}
+          disabled={!connectedDevice}
+        >
+          <Text style={[styles.buttonText, !isConnected && styles.buttonTextDisabled]}>
+            {isCollecting ? 'Stop collection' : 'Start new extraction'}
+          </Text>
+        </TouchableOpacity>
+        {!isConnected && (
+          <Text style={styles.connectionMessage}>
+            Connect your PineTime to proceed.
+          </Text>
+        )}
       </View>
 
       <Modal
