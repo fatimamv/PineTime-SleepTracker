@@ -11,10 +11,21 @@ import { Subscription } from 'react-native-ble-plx';
 import { useConfig } from '../context/ConfigContext';
 import styles from './styles';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { COLORS } from '../constants/theme';
+import { COLORS, SPACING } from '../constants/theme';
+import { format, isSameDay } from 'date-fns';
+import { Calendar } from '../components/Calendar';
+
 interface User {
   id: number;
   name: string;
+}
+
+interface SleepRecord {
+  id: number;
+  created_at: string;
+  user_id: number;
+  user_name?: string;
+  total_sleep_time?: number | null;
 }
 
 const HomeScreen: ScreenComponent = () => {
@@ -27,12 +38,17 @@ const HomeScreen: ScreenComponent = () => {
   const [newUserName, setNewUserName] = useState('');
   const [sleepRecordId, setSleepRecordId] = useState<number | null>(null);
   const { connectedDevice, setConnectedDevice } = useBluetooth();
+  const [availableRecords, setAvailableRecords] = useState<SleepRecord[]>([]);
+  const [currentDateIndex, setCurrentDateIndex] = useState<number>(0);
   const collectionSubscriptions = useRef<{ accel: Subscription | null; hr: Subscription | null }>({
     accel: null,
     hr: null,
   });
   const cleanupRef = useRef<(() => void) | null>(null);
   const isConnected = !!connectedDevice; 
+  const [availableMetrics, setAvailableMetrics] = useState<{[key: string]: boolean}>({});
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   
 
   const requestPermissions = async () => {
@@ -114,6 +130,135 @@ const HomeScreen: ScreenComponent = () => {
     testConnection();
   }, []);
 
+  useEffect(() => {
+    const fetchAvailableDates = async () => {
+      const { data, error } = await supabase
+        .from('sleep_records')
+        .select(`
+          *,
+          users(name),
+          sleep_metrics(total_sleep_time)
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching records:', error);
+        return;
+      }
+
+      const records = data.map(record => ({
+        id: record.id,
+        created_at: record.created_at,
+        user_id: record.user_id,
+        user_name: record.users?.name,
+        total_sleep_time: record.sleep_metrics?.[0]?.total_sleep_time
+      }));
+
+      setAvailableRecords(records);
+      if (records.length > 0) {
+        setCurrentDateIndex(0);
+      }
+    };
+
+    fetchAvailableDates();
+  }, []);
+
+  useEffect(() => {
+    const checkDataAvailability = async (id: number) => {
+      if (!id) {
+        setAvailableMetrics({});
+        return;
+      }
+
+      const metrics: {[key: string]: boolean} = {};
+
+      // Check Heart Rate data
+      const { data: hrData } = await supabase
+        .from('raw_sensor_data')
+        .select('id')
+        .eq('sleep_record_id', id)
+        .eq('sensor_type', 'heart_rate')
+        .limit(1);
+      metrics['Heart Rate'] = (hrData?.length ?? 0) > 0;
+
+      // Check Accelerometer data
+      const { data: accData } = await supabase
+        .from('raw_sensor_data')
+        .select('id')
+        .eq('sleep_record_id', id)
+        .eq('sensor_type', 'accelerometer')
+        .limit(1);
+      metrics['Accelerometer'] = (accData?.length ?? 0) > 0;
+
+      // Check Cole-Kripke data
+      const { data: ckData } = await supabase
+        .from('sleep_classification')
+        .select('id')
+        .eq('sleep_record_id', id)
+        .limit(1);
+      metrics['Cole-Kripke'] = (ckData?.length ?? 0) > 0;
+
+      // Check Sleep Stages data
+      const { data: stagesData } = await supabase
+        .from('sleep_stages')
+        .select('stage')
+        .eq('sleep_record_id', id)
+        .limit(1);
+      
+      metrics['Sleep Stages'] = Boolean(
+        stagesData && 
+        stagesData.length > 0 && 
+        !stagesData.some(stage => stage.stage === 'invalid')
+      );
+
+      // Check HRV data
+      const { data: hrvData } = await supabase
+        .from('sleep_metrics')
+        .select('hrv_rmssd, hrv_sdnn')
+        .eq('sleep_record_id', id)
+        .single();
+      metrics['HRV'] = !!(hrvData?.hrv_rmssd && hrvData?.hrv_sdnn);
+
+      // Check Sleep Quality data
+      const { data: qualityData } = await supabase
+        .from('sleep_metrics')
+        .select('waso_minutes, fragmentation_index, sol_seconds')
+        .eq('sleep_record_id', id)
+        .single();
+
+      metrics['Sleep Quality'] = Boolean(qualityData && 
+        typeof qualityData.waso_minutes === 'number' && 
+        typeof qualityData.fragmentation_index === 'number' && 
+        typeof qualityData.sol_seconds === 'number');
+        
+      setAvailableMetrics(metrics);
+    };
+
+    if (availableRecords.length > 0 && currentDateIndex < availableRecords.length) {
+      checkDataAvailability(availableRecords[currentDateIndex].id);
+    }
+  }, [availableRecords, currentDateIndex]);
+
+  const handlePreviousDate = () => {
+    if (currentDateIndex < availableRecords.length - 1) {
+      const newIndex = currentDateIndex + 1;
+      setCurrentDateIndex(newIndex);
+      setSelectedDate(new Date(availableRecords[newIndex].created_at));
+    }
+  };
+
+  const handleNextDate = () => {
+    if (currentDateIndex > 0) {
+      const newIndex = currentDateIndex - 1;
+      setCurrentDateIndex(newIndex);
+      setSelectedDate(new Date(availableRecords[newIndex].created_at));
+    }
+  };
+
+  const handleMonthChange = (newDate: Date) => {
+    setCurrentMonth(newDate);
+  };
+
   const { accelFrequency, hrFrequency } = useConfig();
   const accelFreqMs = accelFrequency * 1000;
   const hrFreqMs = hrFrequency * 1000;
@@ -179,6 +324,24 @@ const HomeScreen: ScreenComponent = () => {
     }
   };
 
+  const formatSleepTime = (minutes: number | null | undefined) => {
+    if (!minutes) return '—— ——';
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return `${hours.toString().padStart(2, '0')} h ${mins.toString().padStart(2, '0')} min`;
+  };
+
+  const handleDateSelect = (date: Date) => {
+    setSelectedDate(date);
+    // Find the index of the record for the selected date
+    const index = availableRecords.findIndex(record => 
+      isSameDay(new Date(record.created_at), date)
+    );
+    if (index !== -1) {
+      setCurrentDateIndex(index);
+    }
+  };
+
   return (
     <View style={styles.container}>
       {!isConnected && (
@@ -189,6 +352,91 @@ const HomeScreen: ScreenComponent = () => {
           </Text>
         </View>
       )}
+
+      {availableRecords.length > 0 && (
+        <>
+          <View style={styles.dateNavigation}>
+            <TouchableOpacity 
+              onPress={handlePreviousDate}
+              disabled={currentDateIndex === availableRecords.length - 1}
+            >
+              <Icon 
+                name="chevron-left" 
+                size={24} 
+                color={currentDateIndex === availableRecords.length - 1 ? COLORS.disabled : COLORS.text.primary} 
+                style={{ paddingHorizontal: 15 }}
+              />
+            </TouchableOpacity>
+            
+            <Text style={styles.dateText}>
+              {format(new Date(availableRecords[currentDateIndex].created_at), 'MMMM do, yyyy')}
+            </Text>
+            
+            <TouchableOpacity 
+              onPress={handleNextDate}
+              disabled={currentDateIndex === 0}
+            >
+              <Icon 
+                name="chevron-right" 
+                size={24} 
+                style={{ paddingHorizontal: 15 }}
+                color={currentDateIndex === 0 ? COLORS.disabled : COLORS.text.primary} 
+              />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.recordInfo}>
+            <Text style={styles.recordIDText}>
+              Record ID: {availableRecords[currentDateIndex].id}  |  {availableRecords[currentDateIndex].user_name}
+            </Text>
+            <View style={[styles.rowContainer, { 
+              justifyContent: 'center', 
+              alignItems: 'center',
+              paddingHorizontal: SPACING.lg,
+              marginBottom: 0,
+            }]}>
+              <View style={styles.flexItem}>
+                <View style={styles.sleepTimeCircle}>
+                  <Text style={styles.sleepTimeText}>
+                    Total Sleep Time:
+                  </Text>
+                  <Text style={[styles.sleepTimeText, { marginTop: 5, fontFamily: 'Roboto-Regular', fontSize: 20 }]}>
+                    {formatSleepTime(availableRecords[currentDateIndex].total_sleep_time)}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.flexItem}>
+                <View style={styles.availableMetricsContainer}>
+                  <Text style={{ fontWeight: 'bold', marginBottom: 5, fontSize: 15 }}>Available Data</Text>
+                  {['Heart Rate', 'Accelerometer', 'Cole-Kripke', 'Sleep Stages', 'HRV', 'Sleep Quality'].map((metric) => (
+                    <View key={metric} style={styles.metricRow}>
+                      <View style={[
+                        styles.availabilityDot,
+                        { backgroundColor: availableMetrics[metric] ? COLORS.primary : COLORS.disabled }
+                      ]} />
+                      <Text style={[
+                        styles.metricText,
+                        { color: availableMetrics[metric] ? COLORS.text.primary : COLORS.text.disabled }
+                      ]}>
+                        {metric}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            </View>
+          </View>
+          <View style={styles.calendarContainer}>
+            <Calendar 
+              currentDate={currentMonth}
+              availableDates={availableRecords.map(record => new Date(record.created_at))}
+              selectedDate={selectedDate || new Date(availableRecords[currentDateIndex]?.created_at)}
+              onDateSelect={handleDateSelect}
+              onMonthChange={handleMonthChange}
+            />
+          </View>
+        </>
+      )}
+
       <View style={styles.content}>
         <Text style={styles.subHeader}></Text>
       </View>

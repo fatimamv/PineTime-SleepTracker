@@ -3,10 +3,12 @@ import { ViewStyle, TextStyle, ImageStyle } from 'react-native';
 export const COLORS = {
   primary: '#4CBAE6',
   secondary: '#f0f0f0',
+  disabled: '#C8C8C8',
   text: {
     primary: '#000000',
     secondary: '#666666',
     light: '#ffffff',
+    disabled: '#C8C8C8',
   },
   border: '#e0e0e0',
   background: {

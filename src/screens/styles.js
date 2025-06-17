@@ -348,6 +348,72 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  dateNavigation: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.md,
+  },
+  dateText: {
+    fontSize: 22,
+    color: COLORS.text.primary,
+    fontFamily: 'Roboto-Light',
+  },
+  recordInfo: {
+    alignItems: 'center',
+  },
+  recordIDText: {
+    fontSize: FONT_SIZE.md,
+    color: COLORS.text.secondary,
+    fontFamily: 'Roboto-Regular',
+    marginVertical: 2,
+    marginBottom: 30,
+  },
+  sleepTimeCircle: {
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    borderWidth: 6,
+    borderColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.background,
+    padding: SPACING.sm,
+    marginRight: SPACING.lg,
+  },
+  sleepTimeText: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.text.primary,
+    fontFamily: 'Roboto-Light',
+    textAlign: 'center',
+  },
+  availableMetricsContainer: {
+    justifyContent: 'center',
+    height: 160,
+    gap: 5,
+    paddingLeft: SPACING.lg,
+  },
+  metricRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  availabilityDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  metricText: {
+    fontSize: FONT_SIZE.sm,
+    fontFamily: 'Roboto-Regular',
+  },
+  flexItem: {
+    flex: 1,
+  },
+  calendarContainer: {
+    paddingHorizontal: SPACING.lg,
+  },
 });
 
 export default styles;

@@ -111,7 +111,7 @@ const ExportationScreen = () => {
       Alert.alert('Error', 'Please select a sleep record ID');
       return;
     }
-  
+
     setIsExporting(true);
   
     try {
