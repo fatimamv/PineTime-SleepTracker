@@ -2,7 +2,7 @@ import { StyleSheet } from 'react-native';
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, COMMON_STYLES } from '../constants/theme';
 
 const styles = StyleSheet.create({
-  subHeader: { fontSize: 20, fontWeight: '300', marginTop: 45, marginBottom: 20 },
+  subHeader: { fontSize: 20, fontWeight: '200', marginTop: 45, marginBottom: 20, fontFamily: 'Roboto-Light', color: COLORS.text.primary },
   rowContainer: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 },
   label: { fontSize: 16, fontWeight: '600' },
 	header: { 
@@ -71,6 +71,8 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'regular',
     marginBottom: 0,
+    fontFamily: 'Roboto-Regular',
+    color: COLORS.text.primary,
   },
   statusContainer: {
     padding: 15,
@@ -175,6 +177,7 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     padding: SPACING.lg,
+    paddingBottom: 40,
   },
   headerContent: {
     flexDirection: 'row',
@@ -315,6 +318,35 @@ const styles = StyleSheet.create({
     minWidth: '100%',
     marginLeft: -SPACING.md,
     height: 250,
+  },
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+  },
+  checkboxLabel: {
+    fontSize: FONT_SIZE.md,
+    marginLeft: SPACING.sm,
+    color: COLORS.text.primary,
+  },
+  dateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: SPACING.md,
+    justifyContent: 'space-between',
+  },
+  dateInput: {
+    width: '45%',
+    padding: SPACING.sm,
+    borderRadius: BORDER_RADIUS.sm, 
+    backgroundColor: COLORS.background.input,
+    fontFamily: 'Roboto-Regular',
+  },
+  dateInputContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
 });
 
