@@ -11,7 +11,7 @@ import { Subscription } from 'react-native-ble-plx';
 import { useConfig } from '../context/ConfigContext';
 import styles from './styles';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-
+import { COLORS } from '../constants/theme';
 interface User {
   id: number;
   name: string;
@@ -86,7 +86,7 @@ const HomeScreen: ScreenComponent = () => {
   
   useEffect(() => {
     const fetchUsers = async () => {
-      const usersFromDB = await getUsers();  // This is the function we created to get the users
+      const usersFromDB = await getUsers();  // This is the function created to get the users
       setUsers(usersFromDB);
     };
   
@@ -148,13 +148,13 @@ const HomeScreen: ScreenComponent = () => {
     console.log('🛑 Stopping data collection...');
     collectionSubscriptions.current.accel?.remove();
     collectionSubscriptions.current.hr?.remove();
-    cleanupRef.current?.(); // Esto corta el keep-alive y monitoreo BLE
+    cleanupRef.current?.(); // This cuts the keep-alive and BLE monitoring
     collectionSubscriptions.current = { accel: null, hr: null };
     cleanupRef.current = null;
     setIsCollecting(false);
     if (sleepRecordId) {
       try {
-        // 1. Actualiza ended_at
+        // 1. Update ended_at
         const { error: updateError } = await supabase
           .from('sleep_records')
           .update({ ended_at: new Date().toISOString() })
@@ -165,8 +165,8 @@ const HomeScreen: ScreenComponent = () => {
           console.log('🕓 ended_at actualizado para sleep_record_id:', sleepRecordId);
         }
     
-        // 2. Llama al backend
-        const res = await fetch('https://d2df-2001-7c7-1180-821-70ae-4e9e-86a7-7fc8.ngrok-free.app/compute', {
+        // 2. Call the backend
+        const res = await fetch('https://a830-2a02-3033-680-4254-b069-427-9527-d5fe.ngrok-free.app/compute', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sleep_record_id: sleepRecordId }),
@@ -248,6 +248,7 @@ const HomeScreen: ScreenComponent = () => {
                 placeholder="Enter new user name"
                 value={newUserName}
                 onChangeText={setNewUserName}
+                placeholderTextColor={COLORS.text.secondary}
               />
             )}
 

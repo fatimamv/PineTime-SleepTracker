@@ -11,6 +11,7 @@ import { BluetoothProvider } from './src/context/BluetoothContext';
 import { Buffer } from 'buffer';
 global.Buffer = global.Buffer || Buffer;
 import { ConfigProvider } from './src/context/ConfigContext';
+import { COLORS } from './src/constants/theme';
 
 const Tab = createBottomTabNavigator();
 
@@ -21,14 +22,14 @@ export default function App() {
         <NavigationContainer>
           <Tab.Navigator
             screenOptions={{
-            tabBarActiveTintColor: '#007AFF',
-            tabBarInactiveTintColor: '#8E8E93',
-            tabBarStyle: {
-              backgroundColor: '#fff',
-              borderTopWidth: 1,
-              borderTopColor: '#E5E5EA',
-            },
-            headerShown: false,
+              tabBarActiveTintColor: COLORS.primary,
+              tabBarInactiveTintColor: COLORS.text.secondary,
+              tabBarStyle: {
+                backgroundColor: '#fff',
+                borderTopWidth: 1,
+                borderTopColor: COLORS.border,
+              },
+              headerShown: false,
             }}
           >
             <Tab.Screen 

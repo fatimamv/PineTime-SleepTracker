@@ -12,6 +12,7 @@ export const COLORS = {
   background: {
     primary: '#ffffff',
     secondary: '#f0f0f0',
+    input: '#f2f2f2',
   }
 };
 
@@ -29,12 +30,6 @@ export const FONT_SIZE = {
   md: 16,
   lg: 20,
   xl: 24,
-};
-
-export const FONT_WEIGHT = {
-  light: '200',
-  normal: '400',
-  bold: '600',
 };
 
 export const FONT_FAMILY = {

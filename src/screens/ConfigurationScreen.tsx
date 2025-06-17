@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import { useConfig } from '../context/ConfigContext';
 import manager from '../utils/BluetoothManager';
 import type { Device } from 'react-native-ble-plx';
 import styles from './styles';
+import { COLORS } from '../constants/theme';
 
 const ConfigurationScreen = () => {
   const { connectedDevice, setConnectedDevice } = useBluetooth();
@@ -112,7 +113,9 @@ const ConfigurationScreen = () => {
         onPress={startScan}
         disabled={isScanning}
       >
-        <Text style={styles.buttonText}>{isScanning ? 'Scanning...' : 'Scan for devices'}</Text>
+        <Text style={[styles.buttonText, isScanning && { color: COLORS.text.secondary }]}>
+          {isScanning ? 'Scanning...' : 'Scan for devices'}
+        </Text>
       </TouchableOpacity>
 
       {devices.map((device) => (
