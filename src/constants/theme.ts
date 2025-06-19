@@ -14,7 +14,7 @@ export const COLORS = {
   background: {
     primary: '#ffffff',
     secondary: '#f0f0f0',
-    input: '#f2f2f2',
+    input: '#EFEFEF',
   }
 };
 

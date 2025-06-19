@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, Alert, PermissionsAndroid, Platform, TouchableOpacity, Modal, Button, TextInput } from 'react-native';
 import { ScreenComponent } from './types';
-import { ensurePineTime, startCollection } from '../utils/BluetoothManager';
+import manager, { ensurePineTime, startCollection } from '../utils/BluetoothManager';
 import { supabase } from '../api/supabaseClient';
 console.log('👀 Supabase URL:', supabase);
 import { Picker } from '@react-native-picker/picker';
@@ -408,7 +408,7 @@ const HomeScreen: ScreenComponent = () => {
                 <View style={styles.availableMetricsContainer}>
                   <Text style={{ fontWeight: 'bold', marginBottom: 5, fontSize: 15 }}>Available Data</Text>
                   {['Heart Rate', 'Accelerometer', 'Cole-Kripke', 'Sleep Stages', 'HRV', 'Sleep Quality'].map((metric) => (
-                    <View key={metric} style={styles.metricRow}>
+                    <View key={metric} style={[styles.metricRow, { marginBottom: 0, marginTop: 0 }]}>
                       <View style={[
                         styles.availabilityDot,
                         { backgroundColor: availableMetrics[metric] ? COLORS.primary : COLORS.disabled }
@@ -470,29 +470,65 @@ const HomeScreen: ScreenComponent = () => {
         visible={isModalVisible}
       >
         <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { paddingTop: 60 }]}>
+            <TouchableOpacity
+              onPress={() => setIsModalVisible(false)}
+              style={{
+                position: 'absolute',
+                top: 15,
+                right: 15,
+                zIndex: 1,
+                padding: 0,
+                backgroundColor: COLORS.background.input,
+                borderRadius: 15,
+                width: 30,
+                height: 30,
+                justifyContent: 'center',
+                alignItems: 'center',
+              }}
+            >
+              <Text style={{ color: COLORS.text.primary, fontSize: 18, fontWeight: 'bold' }}>×</Text>
+            </TouchableOpacity>
+            
             <Text style={styles.modalTitle}>
               Insert the <Text style={{ fontWeight: 'bold' }}>name</Text> of the person wearing the PineTime to start
             </Text>
 
             {!isNewUser ? (
-              <Picker
-                selectedValue={selectedUser}
-                onValueChange={(value: string) => {
-                  setSelectedUser(value);
-                  if (value === 'new') {
-                    setIsNewUser(true);
-                  }
-                }}
-              >
-                {users.map((u: User) => (
-                  <Picker.Item key={u.id} label={u.name} value={u.name} />
-                ))}
-                <Picker.Item label="Add new person..." value="new" />
-              </Picker>
+              <View>
+                <Picker
+                  selectedValue={selectedUser}
+                  onValueChange={(value: string) => {
+                    setSelectedUser(value);
+                    if (value === 'new') {
+                      setIsNewUser(true);
+                    }
+                  }}
+                  style={styles.picker}
+                  dropdownIconColor={COLORS.text.primary}
+                >
+                  <Picker.Item 
+                    label="Select a user..." 
+                    value="" 
+                    color={COLORS.text.secondary}
+                  />
+                  {users.map((u: User) => (
+                    <Picker.Item 
+                      key={u.id} 
+                      label={u.name} 
+                      value={u.name}
+                    />
+                  ))}
+                  <Picker.Item 
+                    label="Add new person..." 
+                    value="new"
+                    color={COLORS.primary}
+                  />
+                </Picker>
+              </View>
             ) : (
               <TextInput
-                style={styles.input}
+                style={[styles.input, { width: '100%' }]}
                 placeholder="Enter new user name"
                 value={newUserName}
                 onChangeText={setNewUserName}
@@ -501,7 +537,7 @@ const HomeScreen: ScreenComponent = () => {
             )}
 
             <TouchableOpacity
-              style={styles.buttonPrimary}
+              style={[styles.buttonPrimary, { marginTop: 25 }]}
               onPress={async () => {
                 console.log('👉 Button pressed');
               
@@ -533,13 +569,6 @@ const HomeScreen: ScreenComponent = () => {
               }}
             >
               <Text style={styles.buttonPrimaryText}>Start extracting data</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => setIsModalVisible(false)}
-              style={styles.cancelButton}
-            >
-              <Text style={{ color: '#999' }}>Cancel</Text>
             </TouchableOpacity>
           </View>
         </View>

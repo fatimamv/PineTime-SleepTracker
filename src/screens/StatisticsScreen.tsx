@@ -35,7 +35,7 @@ interface XYZData {
 }
 
 export const StatisticsScreen = () => {
-  const [selectedCategories, setSelectedCategories] = useState<string[]>(['Heart Rate'])
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [recordId, setRecordId] = useState('')
   const [recordDate, setRecordDate] = useState<Date | null>(null)
   const [availableMetrics, setAvailableMetrics] = useState<{[key: string]: boolean}>({})
@@ -61,6 +61,8 @@ export const StatisticsScreen = () => {
     if (data) {
       setRecordId(data.id.toString());
       setRecordDate(new Date(data.created_at));
+      // Check data availability but don't auto-select categories
+      await checkDataAvailability(data.id.toString());
     }
   };
 
@@ -172,7 +174,7 @@ export const StatisticsScreen = () => {
       if (data?.created_at) {
         setRecordDate(new Date(data.created_at))
         await checkDataAvailability(numericValue);
-        // Reset selected categories when changing ID
+        // Don't auto-select categories when changing ID
         setSelectedCategories([])
       }
     } else {

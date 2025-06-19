@@ -29,7 +29,6 @@ const ExportationScreen = () => {
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
   const [fileFormat, setFileFormat] = useState<'csv' | 'json'>('csv');
-  const [email, setEmail] = useState('');
   const [openStart, setOpenStart] = useState(false);
   const [openEnd, setOpenEnd] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
@@ -294,17 +293,33 @@ const ExportationScreen = () => {
           <Text style={styles.title}>Exportation File</Text>
         </View>
 
-        <Text style={{...styles.subHeader, marginTop: 20}}>Choose the metrics you want to export a voy a agregar texto para prueba</Text>
-        {metricsList.map(metric => (
-          <View key={metric.value} style={styles.checkboxRow}>
-            <Checkbox
-              status={selectedMetrics.includes(metric.value) ? 'checked' : 'unchecked'}
-              onPress={() => toggleMetric(metric.value)}
-              color={COLORS.primary}
-            />
-            <Text style={styles.checkboxLabel}>{metric.label}</Text>
+        <Text style={{...styles.subHeader, marginTop: 20}}>Choose the metrics you want to export</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between'}}>
+          <View style={{ flex: 1, marginRight: 10 }}>
+            {metricsList.slice(0, 3).map(metric => (
+              <View key={metric.value} style={styles.checkboxRow}>
+                <Checkbox
+                  status={selectedMetrics.includes(metric.value) ? 'checked' : 'unchecked'}
+                  onPress={() => toggleMetric(metric.value)}
+                  color={COLORS.primary}
+                />
+                <Text style={styles.checkboxLabel}>{metric.label}</Text>
+              </View>
+            ))}
           </View>
-        ))}
+          <View style={{ flex: 1, marginLeft: 10 }}>
+            {metricsList.slice(3, 6).map(metric => (
+              <View key={metric.value} style={styles.checkboxRow}>
+                <Checkbox
+                  status={selectedMetrics.includes(metric.value) ? 'checked' : 'unchecked'}
+                  onPress={() => toggleMetric(metric.value)}
+                  color={COLORS.primary}
+                />
+                <Text style={styles.checkboxLabel}>{metric.label}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
 
         <Text style={{...styles.subHeader, marginBottom: 10}}>Choose the dates you need</Text>
         <View style={styles.dateRow}>
@@ -313,7 +328,9 @@ const ExportationScreen = () => {
             onPress={() => setOpenStart(true)}
           >
             <View style={styles.dateInputContent}>
-              <Text style={{color: COLORS.text.secondary}}>
+              <Text style={{
+                color: startDate ? COLORS.text.primary : COLORS.text.secondary
+              }}>
                 {startDate ? startDate.toLocaleDateString() : 'From'}
               </Text>
               <Icon name="calendar" size={16} color={COLORS.text.secondary} />
@@ -325,7 +342,9 @@ const ExportationScreen = () => {
             onPress={() => setOpenEnd(true)}
           >
             <View style={styles.dateInputContent}>
-              <Text style={{ color: COLORS.text.secondary}}>
+              <Text style={{
+                color: endDate ? COLORS.text.primary : COLORS.text.secondary
+              }}>
                 {endDate ? endDate.toLocaleDateString() : 'To'}
               </Text>
               <Icon name="calendar" size={16} color={COLORS.text.secondary} />
@@ -342,7 +361,7 @@ const ExportationScreen = () => {
           onConfirm={(date: Date) => {
             setOpenStart(false);
             setStartDate(date);
-            if (startDate) fetchAvailableSleepRecords();
+            if (startDate && endDate) fetchAvailableSleepRecords();
           }}
         />
         <DatePicker
@@ -353,18 +372,19 @@ const ExportationScreen = () => {
           onConfirm={(date: Date) => {
             setOpenEnd(false);
             setEndDate(date);
-            if (startDate) fetchAvailableSleepRecords();
+            if (startDate && endDate) fetchAvailableSleepRecords();
           }}
           onCancel={() => setOpenEnd(false)}
         />
 
         {availableRecordIds.length > 0 && (
-          <View style={{ marginVertical: 10 }}>
-            <Text style={styles.subHeader}>Select a Sleep Record ID</Text>
+          <View >
+            <Text style={{...styles.subHeader, marginTop: 20, marginBottom: 10}}>Select a Sleep Record ID</Text>
             <Picker
               selectedValue={selectedRecordId}
               onValueChange={(itemValue) => setSelectedRecordId(itemValue)}
-              style={{ ...styles.dateInput, color: COLORS.text.primary, paddingVertical: 0, width: '100%'}}
+              style={{ ...styles.picker, color: COLORS.text.primary, paddingVertical: 0}}
+              dropdownIconColor={COLORS.text.primary}
             >
               <Picker.Item label="Select..." value={null} />
               {availableRecordIds.map((id) => (
@@ -374,7 +394,7 @@ const ExportationScreen = () => {
           </View>
         )}
 
-        <Text style={styles.subHeader}>Choose the file format</Text>
+        <Text style={{...styles.subHeader, marginTop: 25, marginBottom: 10}}>Choose the file format</Text>
         <Menu
           visible={menuVisible}
           onDismiss={() => setMenuVisible(false)}
@@ -384,7 +404,11 @@ const ExportationScreen = () => {
               onPress={() => setMenuVisible(true)}
             >
               <View style={styles.dateInputContent}>
-                <Text style={{color: COLORS.text.secondary}}>{fileFormat.toUpperCase()}</Text>
+                <Text style={{
+                  color: fileFormat ? COLORS.text.primary : COLORS.text.secondary
+                }}>
+                  {fileFormat.toUpperCase()}
+                </Text>
                 <Icon name="chevron-down" size={16} color={COLORS.text.secondary} />
               </View>
             </TouchableOpacity>
@@ -394,25 +418,8 @@ const ExportationScreen = () => {
           <Menu.Item onPress={() => { setFileFormat('json'); setMenuVisible(false); }} title="JSON" />
         </Menu>
 
-        <Text style={styles.subHeader}>Where do you want to receive your file?</Text>
-        <TextInput
-          label="Email (optional)"
-          value={email}
-          onChangeText={setEmail}
-          style={{...styles.dateInput, width: '100%', paddingVertical: 0, marginBottom: 50}}
-          theme={{
-            colors: {
-              primary: COLORS.text.secondary,
-              background: 'transparent',
-              onSurface: COLORS.text.secondary,
-              onSurfaceVariant: COLORS.text.secondary,
-            }
-          }}
-          keyboardType="email-address"
-        />
-
         <TouchableOpacity 
-          style={[styles.button, isExporting && styles.buttonDisabled]} 
+          style={[styles.button, isExporting && styles.buttonDisabled, { marginTop: 35 }]} 
           onPress={handleExport} 
           disabled={isExporting}
         >
