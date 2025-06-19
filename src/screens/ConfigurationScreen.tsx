@@ -55,7 +55,6 @@ const ConfigurationScreen = () => {
       const connected = await device.connect();
       await connected.discoverAllServicesAndCharacteristics();
       setConnectedDevice(connected);
-      Alert.alert('Success', `Connected to ${device.name}`);
     } catch (err) {
       console.error('Connection error:', err);
       Alert.alert('Error', 'Failed to connect');
@@ -107,33 +106,41 @@ const ConfigurationScreen = () => {
         <Text style={styles.buttonText}>Save configuration</Text>
       </TouchableOpacity>
 
-      <Text style={styles.subHeader}>Bluetooth Connection</Text>
-      <TouchableOpacity
-        style={[styles.button, isScanning && styles.buttonDisabled]}
-        onPress={startScan}
-        disabled={isScanning}
-      >
-        <Text style={[styles.buttonText, isScanning && { color: COLORS.text.secondary }]}>
-          {isScanning ? 'Scanning...' : 'Scan for devices'}
-        </Text>
-      </TouchableOpacity>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 40, marginBottom: 15 }}>
+        <Text style={[styles.subHeader, { marginTop: 15 }]}>Bluetooth Connection</Text>
+        <TouchableOpacity
+          style={[styles.button, isScanning && styles.buttonDisabled, { 
+            paddingHorizontal: 15, 
+            paddingVertical: 8,
+            marginTop: 0 
+          }]}
+          onPress={startScan}
+          disabled={isScanning}
+        >
+          <Text style={[styles.buttonText, isScanning && { color: COLORS.text.secondary }, { fontSize: 14 }]}>
+            {isScanning ? 'Scanning...' : 'Scan for devices'}
+          </Text>
+        </TouchableOpacity>
+      </View>
 
       {devices.map((device) => (
         <TouchableOpacity
           key={device.id}
-          style={styles.deviceItem}
+          style={[
+            styles.deviceItem,
+            connectedDevice?.id === device.id && styles.deviceItemConnected
+          ]}
           onPress={() => connectToDevice(device)}
         >
-          <Text>{device.name || 'Unnamed device'}</Text>
-          <Text style={styles.deviceId}>{device.id}</Text>
+          <View>
+            <Text>{device.name || 'Unnamed device'}</Text>
+            <Text style={styles.deviceId}>{device.id}</Text>
+          </View>
+          {connectedDevice?.id === device.id && (
+            <Text style={{ color: COLORS.primary, fontWeight: '600' }}>Connected</Text>
+          )}
         </TouchableOpacity>
       ))}
-
-      {connectedDevice && (
-        <View style={styles.connectedStatus}>
-          <Text>Connected to: {connectedDevice.name}</Text>
-        </View>
-      )}
     </ScrollView>
   );
 };

@@ -16,9 +16,9 @@ import {
 import { supabase } from '../api/supabaseClient';
 
 /* ------------------------------------------------------------------
- * Configuración y utilidades
+ Configuration and utilities
  * ---------------------------------------------------------------- */
-export const DEBUG = true; // ← pon a false en producción
+export const DEBUG = true; 
 const log = (...args: any[]) => DEBUG && console.log('[BLE]', ...args);
 
 const manager = new BleManager();
@@ -31,8 +31,7 @@ const HR_SERVICE_UUID      = '0000180d-0000-1000-8000-00805f9b34fb';
 const HR_CHAR_UUID         = '00002a37-0000-1000-8000-00805f9b34fb';
 
 /* ------------------------------------------------------------------
- * Función pública: ensurePineTime
- *  – Devuelve un Device ya conectado (o null si no hay PineTime)
+  * Ensure PineTime connection
  * ---------------------------------------------------------------- */
 export const ensurePineTime = async (): Promise<Device | null> => {
   const state = await manager.state();
@@ -41,7 +40,7 @@ export const ensurePineTime = async (): Promise<Device | null> => {
     return null;
   }
 
-  // ¿ya está conectado?
+  // Check if PineTime is already connected
   const connected = await manager.connectedDevices([]);
   const pineTime = connected.find(d =>
     d.name?.toLowerCase().includes('pinetime') ||
@@ -57,18 +56,18 @@ export const ensurePineTime = async (): Promise<Device | null> => {
 };
 
 /* ------------------------------------------------------------------
- * Helpers internos
+* Internal helpers
  * ---------------------------------------------------------------- */
 const discoverCharacteristics = async (device: Device) => {
   await device.discoverAllServicesAndCharacteristics();
 
-  /* —– DEBUG —– lista todo lo que encuentre ———————————— */
+  /* —– DEBUG ————————— */
   const services = await device.services();
   services.forEach(s => {
     log('service', s.uuid);
   });
 
-  /* —– Busca servicios ignorando mayúsculas ———————————— */
+  /* —– Search services ———————————— */
   const motion = services.find(
     s => s.uuid.toLowerCase() === MOTION_SERVICE_UUID.toLowerCase(),
   );
@@ -100,13 +99,30 @@ const saveSensorData = async (
   type: 'accelerometer' | 'heart_rate',
   value: object,
 ) => {
-  const { error } = await supabase.from('raw_sensor_data').insert({
-    sleep_record_id: sleepRecordId,
-    sensor_type: type,
-    value: JSON.stringify(value),
-    captured_at: new Date().toISOString(),
-  });
-  if (error) log('Supabase insert error', error.message);
+  try {
+    const { data, error } = await supabase.from('raw_sensor_data').insert({
+      sleep_record_id: sleepRecordId,
+      sensor_type: type,
+      value: JSON.stringify(value),
+      captured_at: new Date().toISOString(),
+    }).select();
+
+    if (error) {
+      log('❌ Supabase insert error:', error.message);
+      throw error;
+    }
+
+    if (!data || data.length === 0) {
+      log('⚠️ No data returned after insert');
+      throw new Error('No data returned after insert');
+    }
+
+    log('✅ Data saved successfully:', { type, value });
+    return data;
+  } catch (error) {
+    log('❌ Error in saveSensorData:', error);
+    throw error;
+  }
 };
 
 const createSleepRecord = async (userId: number) => {
@@ -120,7 +136,7 @@ const createSleepRecord = async (userId: number) => {
 };
 
 /* ------------------------------------------------------------------
- * Activación simple del acelerómetro
+ * Accelerometer activation
  * ---------------------------------------------------------------- */
 const enableAccelerometer = async (ctl: Characteristic | undefined) => {
   if (!ctl) {
@@ -142,8 +158,7 @@ const enableAccelerometer = async (ctl: Characteristic | undefined) => {
 };
 
 /* ------------------------------------------------------------------
- * Función pública: startCollection
- *  – Conecta, crea sleepRecord, suscribe y devuelve cleanup
+ *  Connect, creates sleepRecord, subscribes and returns cleanup
  * ---------------------------------------------------------------- */
 export const startCollection = async (opts: {
   device: Device;
@@ -162,38 +177,89 @@ export const startCollection = async (opts: {
       return await fn();
     } catch (e: any) {
       console.error(`[BLE‑ERR] ${label}`, { code: e?.errorCode, reason: e?.reason, message: e?.message });
-      throw e;            // vuelve a propagar para HomeScreen
+      throw e;           
     }
   };
 
-  // todas las operaciones BLE protegidas con safe()
   const { accelChar, accelCtl, hrChar } = await safe('discoverCharacteristics', () =>
     discoverCharacteristics(device)
   );
   await safe('enableAccelerometer', () => enableAccelerometer(accelCtl));
 
-  // 🍃 Mantén conexión viva leyendo HR cada 30 s
+  // Keep connection alive by reading HR every 30 s
   const keepAlive = setInterval(() => hrChar.read().catch(() => {}), 30000);
   const disconnectSub = device.onDisconnected((e) => log('Device disconnected', e?.message));
 
   let lastAccel = 0, lastHr = 0;
 
+  // Force periodic accelerometer reading
+  const accelInterval = setInterval(async () => {
+    try {
+      const now = Date.now();
+      if (now - lastAccel < accelEveryMs) return;
+      
+      const characteristic = await accelChar.read();
+      if (!characteristic?.value) {
+        log('⚠️ No accelerometer value received');
+        return;
+      }
+
+      lastAccel = now;
+      const buf = Buffer.from(characteristic.value, 'base64');
+      log('📊 Accelerometer reading:', buf.toString('hex'));
+
+      if (buf.length === 4) {
+        const x = buf.readInt8(0);
+        const y = buf.readInt8(1);
+        const z = buf.readInt8(2);
+        const w = buf.readInt8(3);
+        await saveSensorData(sleepRecordId, 'accelerometer', { x, y, z, w });
+        log('✅ Accelerometer data saved (4 bytes)');
+        return;
+      }
+
+      if (buf.length === 6) {
+        const x = buf.readInt16LE(0);
+        const y = buf.readInt16LE(2);
+        const z = buf.readInt16LE(4);
+        await saveSensorData(sleepRecordId, 'accelerometer', { x, y, z });
+        log('✅ Accelerometer data saved (6 bytes)');
+        return;
+      }
+
+      log('⚠️ Unexpected accelerometer data length:', buf.length);
+    } catch (error) {
+      log('❌ Error reading accelerometer:', error);
+    }
+  }, accelEveryMs);
+
+  // Keep monitoring spontaneous data
   const accelSub = accelChar.monitor((err, c) => {
-    if (err || !c?.value) 
+    if (err) {
+      log('❌ Accelerometer monitoring error:', err.message);
       return;
+    }
+    if (!c?.value) {
+      log('⚠️ No accelerometer value in monitor');
+      return;
+    }
     const now = Date.now();
-    if (now - lastAccel < accelEveryMs)
+    if (now - lastAccel < accelEveryMs) {
+      log('⏱️ Skipping accelerometer - too soon');
       return;
+    }
     lastAccel = now;
     const buf = Buffer.from(c.value, 'base64');
-    log('accel raw len', buf.length, buf.toString('hex')); 
+    log('📊 Accelerometer monitor reading:', buf.toString('hex'));
 
     if (buf.length === 4) {
       const x = buf.readInt8(0);
       const y = buf.readInt8(1);
       const z = buf.readInt8(2);
       const w = buf.readInt8(3);
-      saveSensorData(sleepRecordId, 'accelerometer', { x, y, z, w });
+      saveSensorData(sleepRecordId, 'accelerometer', { x, y, z, w })
+        .then(() => log('✅ Accelerometer monitor data saved (4 bytes)'))
+        .catch(error => log('❌ Error saving accelerometer monitor data:', error));
       return;
     }
 
@@ -201,22 +267,44 @@ export const startCollection = async (opts: {
       const x = buf.readInt16LE(0);
       const y = buf.readInt16LE(2);
       const z = buf.readInt16LE(4);
-      saveSensorData(sleepRecordId, 'accelerometer', { x, y, z });
+      saveSensorData(sleepRecordId, 'accelerometer', { x, y, z })
+        .then(() => log('✅ Accelerometer monitor data saved (6 bytes)'))
+        .catch(error => log('❌ Error saving accelerometer monitor data:', error));
       return;
     }
+
+    log('⚠️ Unexpected accelerometer monitor data length:', buf.length);
   });
 
   const hrSub = hrChar.monitor((err, c) => {
-    if (err || !c?.value) return;
+    if (err) {
+      log('❌ Heart rate monitoring error:', err.message);
+      return;
+    }
+    if (!c?.value) {
+      log('⚠️ No heart rate value received');
+      return;
+    }
     const now = Date.now();
-    if (now - lastHr < hrEveryMs) return;
+    if (now - lastHr < hrEveryMs) {
+      log('⏱️ Skipping heart rate - too soon');
+      return;
+    }
     lastHr = now;
     const buf = Buffer.from(c.value, 'base64');
     if (buf.length >= 2) {
       const hr = buf.readUInt8(1);
-      safe('saveHr', () =>
-        saveSensorData(sleepRecordId, 'heart_rate', { heartRate: hr })
-      );
+      log('💓 Heart rate received:', hr);
+      safe('saveHr', async () => {
+        try {
+          await saveSensorData(sleepRecordId, 'heart_rate', { heartRate: hr });
+          log('✅ Heart rate saved successfully');
+        } catch (error) {
+          log('❌ Error saving heart rate:', error);
+        }
+      });
+    } else {
+      log('⚠️ Invalid heart rate data length:', buf.length);
     }
   });
 
@@ -226,6 +314,7 @@ export const startCollection = async (opts: {
     hrSub.remove();
     disconnectSub.remove();
     clearInterval(keepAlive);
+    clearInterval(accelInterval);
   };
 
   return { subscriptions: { accel: accelSub, hr: hrSub }, cleanup, sleepRecordId };
