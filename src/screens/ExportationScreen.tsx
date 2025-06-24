@@ -35,6 +35,7 @@ const ExportationScreen = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [availableRecordIds, setAvailableRecordIds] = useState<number[]>([]);
   const [selectedRecordId, setSelectedRecordId] = useState<number | null>(null);
+  const [isCalculating, setIsCalculating] = useState(false);
 
 
   const metricsList = [
@@ -82,7 +83,51 @@ const ExportationScreen = () => {
     setAvailableRecordIds(data.map((r: any) => r.id));
     setSelectedRecordId(null); 
   };
-  
+
+  const calculateMetrics = async (sleepRecordId: number) => {
+    if (isCalculating) return; // Prevent multiple simultaneous calculations
+    
+    setIsCalculating(true);
+    try {
+      console.log('🔄 Attempting to calculate metrics for record:', sleepRecordId);
+      
+      // Check if metrics already exist
+      const { data: existingMetrics } = await supabase
+        .from('sleep_metrics')
+        .select('id')
+        .eq('sleep_record_id', sleepRecordId)
+        .limit(1);
+
+      if (existingMetrics && existingMetrics.length > 0) {
+        console.log('✅ Metrics already exist for record:', sleepRecordId);
+        setIsCalculating(false);
+        return;
+      }
+
+      // Call the backend to calculate metrics
+      const res = await fetch('https://6f52-2a02-3033-680-d6e-19ac-53ab-bd8-afd9.ngrok-free.app/compute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sleep_record_id: sleepRecordId }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+
+      const json = await res.json();
+      console.log('✅ Metrics calculation response:', json);
+      
+    } catch (err: any) {
+      console.error('❌ Error calculating metrics:', err);
+      Alert.alert(
+        'Calculation Error', 
+        'Could not calculate metrics. The ngrok URL may have changed or the server may be unavailable. Please try again later.'
+      );
+    } finally {
+      setIsCalculating(false);
+    }
+  };
 
   const formatData = (data: any[], format: 'csv' | 'json') => {
     if (format === 'json') {
@@ -291,6 +336,12 @@ const ExportationScreen = () => {
       >
         <View style={styles.header}>
           <Text style={styles.title}>Exportation File</Text>
+          {isCalculating && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 5 }}>
+              <Icon name="loader" size={16} color={COLORS.primary} style={{ marginRight: 8 }} />
+              <Text style={{ color: COLORS.primary, fontSize: 12 }}>Calculating metrics...</Text>
+            </View>
+          )}
         </View>
 
         <Text style={{...styles.subHeader, marginTop: 20}}>Choose the metrics you want to export</Text>
@@ -382,7 +433,22 @@ const ExportationScreen = () => {
             <Text style={{...styles.subHeader, marginTop: 20, marginBottom: 10}}>Select a Sleep Record ID</Text>
             <Picker
               selectedValue={selectedRecordId}
-              onValueChange={(itemValue) => setSelectedRecordId(itemValue)}
+              onValueChange={async (itemValue) => {
+                setSelectedRecordId(itemValue);
+                if (itemValue) {
+                  // Check if metrics exist for this record
+                  const { data: existingMetrics } = await supabase
+                    .from('sleep_metrics')
+                    .select('id')
+                    .eq('sleep_record_id', itemValue)
+                    .limit(1);
+
+                  if (!existingMetrics || existingMetrics.length === 0) {
+                    console.log('🔄 No metrics found for record, triggering calculation');
+                    calculateMetrics(itemValue);
+                  }
+                }
+              }}
               style={{ ...styles.picker, color: COLORS.text.primary, paddingVertical: 0}}
               dropdownIconColor={COLORS.text.primary}
             >
@@ -419,12 +485,12 @@ const ExportationScreen = () => {
         </Menu>
 
         <TouchableOpacity 
-          style={[styles.button, isExporting && styles.buttonDisabled, { marginTop: 35 }]} 
+          style={[styles.button, (isExporting || isCalculating) && styles.buttonDisabled, { marginTop: 35 }]} 
           onPress={handleExport} 
-          disabled={isExporting}
+          disabled={isExporting || isCalculating}
         >
-          <Text style={[styles.buttonText, isExporting && styles.buttonTextDisabled]}>
-            {isExporting ? 'Exporting...' : 'Export data'}
+          <Text style={[styles.buttonText, (isExporting || isCalculating) && styles.buttonTextDisabled]}>
+            {isCalculating ? 'Calculating metrics...' : isExporting ? 'Exporting...' : 'Export data'}
           </Text>
         </TouchableOpacity>
       </ScrollView>

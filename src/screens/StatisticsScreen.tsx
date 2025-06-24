@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, ScrollView, TextInput, FlatList } from 'react-native'
+import { View, Text, TouchableOpacity, ScrollView, TextInput, FlatList, Alert } from 'react-native'
 import { format } from 'date-fns'
 import Icon from 'react-native-vector-icons/Feather'
 import React, { useState, useEffect } from 'react'
@@ -44,6 +44,7 @@ export const StatisticsScreen = () => {
   const [modalTitle, setModalTitle] = useState('');
   const [modalData, setModalData] = useState<{ time: string; value: string | number }[]>([]);
   const [modalExtraContent, setModalExtraContent] = useState<React.ReactNode>(null);
+  const [isCalculating, setIsCalculating] = useState(false);
 
   const fetchLastRecordId = async () => {
     const { data, error } = await supabase
@@ -139,6 +140,14 @@ export const StatisticsScreen = () => {
       typeof qualityData.sol_seconds === 'number');
       
     setAvailableMetrics(metrics);
+
+    // Auto-trigger calculation if HRV or Sleep Quality metrics are missing
+    // but we have raw data (heart rate and accelerometer)
+    if ((!metrics['HRV'] || !metrics['Sleep Quality']) && 
+        metrics['Heart Rate'] && metrics['Accelerometer']) {
+      console.log('🔄 Auto-triggering metrics calculation for missing HRV/Sleep Quality');
+      calculateMetrics(id);
+    }
   };
 
   const handleCategoryPress = (category: string) => {
@@ -150,6 +159,16 @@ export const StatisticsScreen = () => {
       }
       return [...prev, category];
     });
+
+    // If HRV or Sleep Quality is selected but not available, try to calculate
+    if ((category === 'HRV' || category === 'Sleep Quality') && 
+        !availableMetrics[category] && 
+        recordId && 
+        availableMetrics['Heart Rate'] && 
+        availableMetrics['Accelerometer']) {
+      console.log(`🔄 Triggering calculation for ${category} category selection`);
+      calculateMetrics(recordId);
+    }
   };
 
   const handleRecordIdChange = async (text: string) => {
@@ -184,6 +203,54 @@ export const StatisticsScreen = () => {
     }
   }
 
+  const calculateMetrics = async (sleepRecordId: string) => {
+    if (isCalculating) return; // Prevent multiple simultaneous calculations
+    
+    setIsCalculating(true);
+    try {
+      console.log('🔄 Attempting to calculate metrics for record:', sleepRecordId);
+      
+      // Check if metrics already exist
+      const { data: existingMetrics } = await supabase
+        .from('sleep_metrics')
+        .select('id')
+        .eq('sleep_record_id', sleepRecordId)
+        .limit(1);
+
+      if (existingMetrics && existingMetrics.length > 0) {
+        console.log('✅ Metrics already exist for record:', sleepRecordId);
+        setIsCalculating(false);
+        return;
+      }
+
+      // Call the backend to calculate metrics
+      const res = await fetch('https://6f52-2a02-3033-680-d6e-19ac-53ab-bd8-afd9.ngrok-free.app/compute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sleep_record_id: parseInt(sleepRecordId) }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+
+      const json = await res.json();
+      console.log('✅ Metrics calculation response:', json);
+      
+      // Refresh data availability after calculation
+      await checkDataAvailability(sleepRecordId);
+      
+    } catch (err: any) {
+      console.error('❌ Error calculating metrics:', err);
+      Alert.alert(
+        'Calculation Error', 
+        'Could not calculate metrics. The ngrok URL may have changed or the server may be unavailable. Please try again later.'
+      );
+    } finally {
+      setIsCalculating(false);
+    }
+  };
+
   return (
     <>
     <ScrollView 
@@ -194,6 +261,12 @@ export const StatisticsScreen = () => {
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <Text style={styles.title}>Statistics</Text>
+          {isCalculating && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 5 }}>
+              <Icon name="loader" size={16} color={COLORS.primary} style={{ marginRight: 8 }} />
+              <Text style={{ color: COLORS.primary, fontSize: 12 }}>Calculating metrics...</Text>
+            </View>
+          )}
           <View style={[styles.recordInput, {marginTop: 5}]}>
             <View style={styles.rowContainer}>
               <Text style={styles.recordLabel}>Record ID:</Text>
