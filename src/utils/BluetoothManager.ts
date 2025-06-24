@@ -140,21 +140,45 @@ const createSleepRecord = async (userId: number) => {
  * ---------------------------------------------------------------- */
 const enableAccelerometer = async (ctl: Characteristic | undefined) => {
   if (!ctl) {
-    log('No control characteristic - trying direct monitor');
-    return;                                 // salimos – no hace falta comando
+    log('⚠️ No control characteristic found - trying direct monitor');
+    return;                                 // salimos – no hace falta comando
   }
-  const payload = Buffer.from([0x01]).toString('base64'); // 0x01 = enable
-  try {
-    // aun cuando isWritable == false, muchos relojes aceptan la escritura
-    await ctl.writeWithResponse(payload);
-    log('Accelerometer enabled with writeWithResponse');
-  } catch (e: unknown) {
-    if (e && typeof e === 'object' && 'message' in e) {
-      log('⚠️ No se pudo escribir (probablemente no necesario):', e.message);
-    } else {
-      log('⚠️ No se pudo escribir (probablemente no necesario)');
+  
+  log('🔧 Attempting to enable accelerometer...');
+  
+  // Try different activation commands
+  const commands = [
+    Buffer.from([0x01]).toString('base64'), // 0x01 = enable
+    Buffer.from([0x02]).toString('base64'), // 0x02 = alternative enable
+    Buffer.from([0xFF]).toString('base64'), // 0xFF = full enable
+  ];
+  
+  for (const payload of commands) {
+    try {
+      log('🔧 Trying command:', Buffer.from(payload, 'base64').toString('hex'));
+      await ctl.writeWithResponse(payload);
+      log('✅ Accelerometer enabled with writeWithResponse');
+      break;
+    } catch (e: unknown) {
+      log('⚠️ writeWithResponse failed for command, trying writeWithoutResponse...');
+      try {
+        await ctl.writeWithoutResponse(payload);
+        log('✅ Accelerometer enabled with writeWithoutResponse');
+        break;
+      } catch (e2: unknown) {
+        if (e2 && typeof e2 === 'object' && 'message' in e2) {
+          log('⚠️ Both write methods failed for command:', e2.message);
+        } else {
+          log('⚠️ Both write methods failed for command');
+        }
+        continue;
+      }
     }
   }
+  
+  // Add delay to allow accelerometer to start
+  log('⏳ Waiting for accelerometer to initialize...');
+  await new Promise(resolve => setTimeout(resolve, 2000));
 };
 
 /* ------------------------------------------------------------------
@@ -206,14 +230,41 @@ export const startCollection = async (opts: {
 
       lastAccel = now;
       const buf = Buffer.from(characteristic.value, 'base64');
-      log('📊 Accelerometer reading:', buf.toString('hex'));
+      log('📊 Accelerometer reading:', buf.toString('hex'), 'length:', buf.length);
+      
+      // Log individual bytes for debugging
+      const bytes = Array.from(buf).map(b => b.toString(16).padStart(2, '0'));
+      log('📊 Individual bytes:', bytes.join(' '));
 
       if (buf.length === 4) {
-        const x = buf.readInt8(0);
-        const y = buf.readInt8(1);
-        const z = buf.readInt8(2);
-        const w = buf.readInt8(3);
-        await saveSensorData(sleepRecordId, 'accelerometer', { x, y, z, w });
+        // Try different parsing methods for 4-byte data
+        const x1 = buf.readInt8(0);
+        const y1 = buf.readInt8(1);
+        const z1 = buf.readInt8(2);
+        const w1 = buf.readInt8(3);
+        
+        // Alternative: try unsigned values
+        const x2 = buf.readUInt8(0);
+        const y2 = buf.readUInt8(1);
+        const z2 = buf.readUInt8(2);
+        const w2 = buf.readUInt8(3);
+        
+        // Alternative: try 16-bit values (first 2 bytes)
+        const x3 = buf.readInt16LE(0);
+        const y3 = buf.readInt16LE(2);
+        
+        log('📊 Parsing attempts for 4-byte data:');
+        log('  Method 1 (signed 8-bit):', { x: x1, y: y1, z: z1, w: w1 });
+        log('  Method 2 (unsigned 8-bit):', { x: x2, y: y2, z: z2, w: w2 });
+        log('  Method 3 (16-bit LE):', { x: x3, y: y3 });
+        
+        // Use the first method for now, but log all attempts
+        await saveSensorData(sleepRecordId, 'accelerometer', { 
+          x: x1, y: y1, z: z1, w: w1,
+          // Add alternative values for debugging
+          x_alt1: x2, y_alt1: y2, z_alt1: z2, w_alt1: w2,
+          x_alt2: x3, y_alt2: y3
+        });
         log('✅ Accelerometer data saved (4 bytes)');
         return;
       }
