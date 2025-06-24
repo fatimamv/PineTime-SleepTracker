@@ -309,17 +309,8 @@ const HomeScreen: ScreenComponent = () => {
         } else {
           console.log('🕓 ended_at actualizado para sleep_record_id:', sleepRecordId);
         }
-    
-        // 2. Call the backend
-        const res = await fetch('https://a830-2a02-3033-680-4254-b069-427-9527-d5fe.ngrok-free.app/compute', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sleep_record_id: sleepRecordId }),
-        });
-        const json = await res.json();
-        console.log('✅ Backend response:', json);
       } catch (err) {
-        console.error('💥 Error al calcular métricas:', err);
+        console.error('💥 Error al actualizar ended_at:', err);
       }
     }
   };

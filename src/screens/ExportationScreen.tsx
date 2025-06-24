@@ -23,9 +23,7 @@ interface SleepRecord {
 }
 
 const ExportationScreen = () => {
-  const [selectedMetrics, setSelectedMetrics] = useState<string[]>([
-    'heart_rate', 'hrv', 'accelerometer', 'cole_kripke', 'sleep_stages', 'sleep_quality'
-  ]);
+  const [selectedMetrics, setSelectedMetrics] = useState<string[]>([]);
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
   const [fileFormat, setFileFormat] = useState<'csv' | 'json'>('csv');
@@ -35,7 +33,8 @@ const ExportationScreen = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [availableRecordIds, setAvailableRecordIds] = useState<number[]>([]);
   const [selectedRecordId, setSelectedRecordId] = useState<number | null>(null);
-
+  const [isCalculating, setIsCalculating] = useState(false);
+  const [availableMetrics, setAvailableMetrics] = useState<{[key: string]: boolean}>({});
 
   const metricsList = [
     { label: 'Heart Rate', value: 'heart_rate' },
@@ -47,9 +46,80 @@ const ExportationScreen = () => {
   ];
 
   const toggleMetric = (metric: string) => {
+    if (!availableMetrics[metric]) return; // Only allow toggling if metric is available
+    
     setSelectedMetrics(prev =>
       prev.includes(metric) ? prev.filter(m => m !== metric) : [...prev, metric]
     );
+  };
+
+  const checkMetricsAvailability = async (recordId: number) => {
+    const availability: {[key: string]: boolean} = {};
+    
+    try {
+      // Check Heart Rate availability
+      const { data: hrData } = await supabase
+        .from('raw_sensor_data')
+        .select('id')
+        .eq('sleep_record_id', recordId)
+        .eq('sensor_type', 'heart_rate')
+        .limit(1);
+      availability.heart_rate = !!(hrData && hrData.length > 0);
+
+      // Check Accelerometer availability
+      const { data: accData } = await supabase
+        .from('raw_sensor_data')
+        .select('id')
+        .eq('sleep_record_id', recordId)
+        .eq('sensor_type', 'accelerometer')
+        .limit(1);
+      availability.accelerometer = !!(accData && accData.length > 0);
+
+      // Check Cole-Kripke availability
+      const { data: ckData } = await supabase
+        .from('sleep_classification')
+        .select('id')
+        .eq('sleep_record_id', recordId)
+        .limit(1);
+      availability.cole_kripke = !!(ckData && ckData.length > 0);
+
+      // Check Sleep Stages availability
+      const { data: stagesData } = await supabase
+        .from('sleep_stages')
+        .select('id')
+        .eq('sleep_record_id', recordId)
+        .limit(1);
+      availability.sleep_stages = !!(stagesData && stagesData.length > 0);
+
+      // Check HRV availability
+      const { data: hrvData } = await supabase
+        .from('sleep_metrics')
+        .select('hrv_rmssd, hrv_sdnn')
+        .eq('sleep_record_id', recordId)
+        .single();
+      availability.hrv = !!(hrvData && (hrvData.hrv_rmssd !== null || hrvData.hrv_sdnn !== null));
+
+      // Check Sleep Quality availability
+      const { data: qualityData } = await supabase
+        .from('sleep_metrics')
+        .select('sol_seconds, waso_minutes, fragmentation_index')
+        .eq('sleep_record_id', recordId)
+        .single();
+      availability.sleep_quality = !!(qualityData && (
+        qualityData.sol_seconds !== null || 
+        qualityData.waso_minutes !== null || 
+        qualityData.fragmentation_index !== null
+      ));
+
+      setAvailableMetrics(availability);
+      
+      // Auto-select available metrics
+      const availableMetricsList = Object.keys(availability).filter(key => availability[key]);
+      setSelectedMetrics(availableMetricsList);
+      
+    } catch (error) {
+      console.error('Error checking metrics availability:', error);
+    }
   };
 
   const validateDates = () => {
@@ -82,7 +152,51 @@ const ExportationScreen = () => {
     setAvailableRecordIds(data.map((r: any) => r.id));
     setSelectedRecordId(null); 
   };
-  
+
+  const calculateMetrics = async (sleepRecordId: number) => {
+    if (isCalculating) return; // Prevent multiple simultaneous calculations
+    
+    setIsCalculating(true);
+    try {
+      console.log('🔄 Attempting to calculate metrics for record:', sleepRecordId);
+      
+      // Check if metrics already exist
+      const { data: existingMetrics } = await supabase
+        .from('sleep_metrics')
+        .select('id')
+        .eq('sleep_record_id', sleepRecordId)
+        .limit(1);
+
+      if (existingMetrics && existingMetrics.length > 0) {
+        console.log('✅ Metrics already exist for record:', sleepRecordId);
+        setIsCalculating(false);
+        return;
+      }
+
+      // Call the backend to calculate metrics
+      const res = await fetch('https://6f52-2a02-3033-680-d6e-19ac-53ab-bd8-afd9.ngrok-free.app/compute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sleep_record_id: sleepRecordId }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+
+      const json = await res.json();
+      console.log('✅ Metrics calculation response:', json);
+      
+    } catch (err: any) {
+      console.error('❌ Error calculating metrics:', err);
+      Alert.alert(
+        'Calculation Error', 
+        'Could not calculate metrics. The ngrok URL may have changed or the server may be unavailable. Please try again later.'
+      );
+    } finally {
+      setIsCalculating(false);
+    }
+  };
 
   const formatData = (data: any[], format: 'csv' | 'json') => {
     if (format === 'json') {
@@ -291,34 +405,12 @@ const ExportationScreen = () => {
       >
         <View style={styles.header}>
           <Text style={styles.title}>Exportation File</Text>
-        </View>
-
-        <Text style={{...styles.subHeader, marginTop: 20}}>Choose the metrics you want to export</Text>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between'}}>
-          <View style={{ flex: 1, marginRight: 10 }}>
-            {metricsList.slice(0, 3).map(metric => (
-              <View key={metric.value} style={styles.checkboxRow}>
-                <Checkbox
-                  status={selectedMetrics.includes(metric.value) ? 'checked' : 'unchecked'}
-                  onPress={() => toggleMetric(metric.value)}
-                  color={COLORS.primary}
-                />
-                <Text style={styles.checkboxLabel}>{metric.label}</Text>
-              </View>
-            ))}
-          </View>
-          <View style={{ flex: 1, marginLeft: 10 }}>
-            {metricsList.slice(3, 6).map(metric => (
-              <View key={metric.value} style={styles.checkboxRow}>
-                <Checkbox
-                  status={selectedMetrics.includes(metric.value) ? 'checked' : 'unchecked'}
-                  onPress={() => toggleMetric(metric.value)}
-                  color={COLORS.primary}
-                />
-                <Text style={styles.checkboxLabel}>{metric.label}</Text>
-              </View>
-            ))}
-          </View>
+          {isCalculating && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 5 }}>
+              <Icon name="loader" size={16} color={COLORS.primary} style={{ marginRight: 8 }} />
+              <Text style={{ color: COLORS.primary, fontSize: 12 }}>Calculating metrics...</Text>
+            </View>
+          )}
         </View>
 
         <Text style={{...styles.subHeader, marginBottom: 10}}>Choose the dates you need</Text>
@@ -382,7 +474,28 @@ const ExportationScreen = () => {
             <Text style={{...styles.subHeader, marginTop: 20, marginBottom: 10}}>Select a Sleep Record ID</Text>
             <Picker
               selectedValue={selectedRecordId}
-              onValueChange={(itemValue) => setSelectedRecordId(itemValue)}
+              onValueChange={async (itemValue) => {
+                setSelectedRecordId(itemValue);
+                if (itemValue) {
+                  // Check if metrics exist for this record
+                  const { data: existingMetrics } = await supabase
+                    .from('sleep_metrics')
+                    .select('id')
+                    .eq('sleep_record_id', itemValue)
+                    .limit(1);
+
+                  if (!existingMetrics || existingMetrics.length === 0) {
+                    console.log('🔄 No metrics found for record, triggering calculation');
+                    calculateMetrics(itemValue);
+                  }
+                  
+                  // Check metrics availability for this record
+                  await checkMetricsAvailability(itemValue);
+                } else {
+                  setSelectedMetrics([]);
+                  setAvailableMetrics({});
+                }
+              }}
               style={{ ...styles.picker, color: COLORS.text.primary, paddingVertical: 0}}
               dropdownIconColor={COLORS.text.primary}
             >
@@ -392,6 +505,52 @@ const ExportationScreen = () => {
               ))}
             </Picker>
           </View>
+        )}
+
+        {selectedRecordId && (
+          <>
+            <Text style={{...styles.subHeader, marginTop: 20}}>Choose the metrics you want to export</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between'}}>
+              <View style={{ flex: 1, marginRight: 10 }}>
+                {metricsList.slice(0, 3).map(metric => (
+                  <View key={metric.value} style={styles.checkboxRow}>
+                    <Checkbox
+                      status={selectedMetrics.includes(metric.value) ? 'checked' : 'unchecked'}
+                      onPress={() => toggleMetric(metric.value)}
+                      color={availableMetrics[metric.value] ? COLORS.primary : COLORS.text.secondary}
+                      disabled={!availableMetrics[metric.value]}
+                    />
+                    <Text style={[
+                      styles.checkboxLabel, 
+                      !availableMetrics[metric.value] && { color: COLORS.text.secondary }
+                    ]}>
+                      {metric.label}
+                      {!availableMetrics[metric.value] && ' (Not available)'}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                {metricsList.slice(3, 6).map(metric => (
+                  <View key={metric.value} style={styles.checkboxRow}>
+                    <Checkbox
+                      status={selectedMetrics.includes(metric.value) ? 'checked' : 'unchecked'}
+                      onPress={() => toggleMetric(metric.value)}
+                      color={availableMetrics[metric.value] ? COLORS.primary : COLORS.text.secondary}
+                      disabled={!availableMetrics[metric.value]}
+                    />
+                    <Text style={[
+                      styles.checkboxLabel, 
+                      !availableMetrics[metric.value] && { color: COLORS.text.secondary }
+                    ]}>
+                      {metric.label}
+                      {!availableMetrics[metric.value] && ' (Not available)'}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          </>
         )}
 
         <Text style={{...styles.subHeader, marginTop: 25, marginBottom: 10}}>Choose the file format</Text>
@@ -419,12 +578,12 @@ const ExportationScreen = () => {
         </Menu>
 
         <TouchableOpacity 
-          style={[styles.button, isExporting && styles.buttonDisabled, { marginTop: 35 }]} 
+          style={[styles.button, (isExporting || isCalculating) && styles.buttonDisabled, { marginTop: 35 }]} 
           onPress={handleExport} 
-          disabled={isExporting}
+          disabled={isExporting || isCalculating}
         >
-          <Text style={[styles.buttonText, isExporting && styles.buttonTextDisabled]}>
-            {isExporting ? 'Exporting...' : 'Export data'}
+          <Text style={[styles.buttonText, (isExporting || isCalculating) && styles.buttonTextDisabled]}>
+            {isCalculating ? 'Calculating metrics...' : isExporting ? 'Exporting...' : 'Export data'}
           </Text>
         </TouchableOpacity>
       </ScrollView>
