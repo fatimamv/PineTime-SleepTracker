@@ -57,22 +57,13 @@ export const SleepStagesChart = ({
           return;
         }
   
-        // Filter out records that are not part of the main sleep session
-        const relevantData = data.filter(record => {
-          const time = new Date(record.start_time);
-          return time.getHours() >= 20 || time.getHours() < 6; // Only keep records between 8 PM and 6 AM
-        });
+        console.log('All sleep stages data:', data);
   
-        if (relevantData.length === 0) {
-          console.error('No relevant sleep stages found');
-          return;
-        }
-  
-        const startTime = new Date(relevantData[0].start_time);
-        const endTime = new Date(relevantData[relevantData.length - 1].end_time);
+        const startTime = new Date(data[0].start_time);
+        const endTime = new Date(data[data.length - 1].end_time);
         const totalDuration = endTime.getTime() - startTime.getTime();
   
-        console.log('Raw data:', relevantData);
+        console.log('Raw data:', data);
         console.log('Start time:', startTime.toLocaleString());
         console.log('End time:', endTime.toLocaleString());
   
@@ -84,7 +75,7 @@ export const SleepStagesChart = ({
         }
         setTimeLabels(labels);
   
-        const newBlocks = relevantData.map(row => {
+        const newBlocks = data.map(row => {
           const start = new Date(row.start_time);
           const end = new Date(row.end_time);
           console.log('Block:', {

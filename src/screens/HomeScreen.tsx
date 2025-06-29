@@ -15,6 +15,9 @@ import { COLORS, SPACING } from '../constants/theme';
 import { format, isSameDay } from 'date-fns';
 import { Calendar } from '../components/Calendar';
 
+// Import log function for debugging
+const log = (...args: any[]) => console.log('[HomeScreen]', ...args);
+
 interface User {
   id: number;
   name: string;
@@ -50,6 +53,10 @@ const HomeScreen: ScreenComponent = () => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   
+  // Connection monitoring
+  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting'>('disconnected');
+  const [lastDataTimestamp, setLastDataTimestamp] = useState<Date | null>(null);
+  const [collectionStartTime, setCollectionStartTime] = useState<Date | null>(null);
 
   const requestPermissions = async () => {
     if (Platform.OS === 'android') {
@@ -93,7 +100,7 @@ const HomeScreen: ScreenComponent = () => {
     const init = async () => {
       const device = await ensurePineTime();
       if (device) {
-        setConnectedDevice(device);   // viene del BluetoothContext
+        setConnectedDevice(device);   // from BluetoothContext
       }
     };
 
@@ -265,11 +272,14 @@ const HomeScreen: ScreenComponent = () => {
 
   const startCollectionForUser = async (userId: number) => {
     if (!connectedDevice) {
-      Alert.alert('Error', 'PineTime no conectado');
+      Alert.alert('Error', 'PineTime not connected');
       return;
     }
   
     try {
+      setConnectionStatus('connecting');
+      setCollectionStartTime(new Date());
+      
       const { subscriptions, cleanup, sleepRecordId } = await startCollection({
         device: connectedDevice,
         userId,
@@ -279,11 +289,53 @@ const HomeScreen: ScreenComponent = () => {
       collectionSubscriptions.current = subscriptions;
       cleanupRef.current = cleanup;
       setIsCollecting(true);
-      setSleepRecordId(sleepRecordId); 
+      setSleepRecordId(sleepRecordId);
+      setConnectionStatus('connected');
+      
+      // Set up connection monitoring with device reconnection handling
+      const connectionMonitor = setInterval(async () => {
+        try {
+          const isStillConnected = await connectedDevice.isConnected();
+          if (!isStillConnected) {
+            setConnectionStatus('disconnected');
+            log('⚠️ Connection lost during collection');
+            
+            // Try to find and reconnect to PineTime
+            const newDevice = await ensurePineTime();
+            if (newDevice) {
+              setConnectedDevice(newDevice);
+              setConnectionStatus('connected');
+              log('✅ Reconnected to PineTime device');
+            }
+          } else {
+            setConnectionStatus('connected');
+          }
+        } catch (error) {
+          setConnectionStatus('disconnected');
+          log('❌ Connection check failed:', error);
+          
+          // Try to find and reconnect to PineTime
+          try {
+            const newDevice = await ensurePineTime();
+            if (newDevice) {
+              setConnectedDevice(newDevice);
+              setConnectionStatus('connected');
+              log('✅ Reconnected to PineTime device after error');
+            }
+          } catch (reconnectError) {
+            log('❌ Failed to reconnect to PineTime:', reconnectError);
+          }
+        }
+      }, 10000); // Check every 10 seconds
+      
+      // Store the monitor interval for cleanup
+      (cleanupRef.current as any).connectionMonitor = connectionMonitor;
+      
     } catch (e: any) {
       console.error('❌ startCollection falló', e);
+      setConnectionStatus('disconnected');
       const msg =
-        e?.reason || e?.message || 'No se pudo iniciar la recolección de datos';
+        e?.reason || e?.message || 'Data collection failed to start';
       Alert.alert('BLE error', msg);
     }
   };
@@ -293,10 +345,20 @@ const HomeScreen: ScreenComponent = () => {
     console.log('🛑 Stopping data collection...');
     collectionSubscriptions.current.accel?.remove();
     collectionSubscriptions.current.hr?.remove();
+    
+    // Clean up connection monitor
+    if (cleanupRef.current && (cleanupRef.current as any).connectionMonitor) {
+      clearInterval((cleanupRef.current as any).connectionMonitor);
+    }
+    
     cleanupRef.current?.(); // This cuts the keep-alive and BLE monitoring
     collectionSubscriptions.current = { accel: null, hr: null };
     cleanupRef.current = null;
     setIsCollecting(false);
+    setConnectionStatus('disconnected');
+    setCollectionStartTime(null);
+    setLastDataTimestamp(null);
+    
     if (sleepRecordId) {
       try {
         // 1. Update ended_at
@@ -310,7 +372,7 @@ const HomeScreen: ScreenComponent = () => {
           console.log('🕓 ended_at actualizado para sleep_record_id:', sleepRecordId);
         }
       } catch (err) {
-        console.error('💥 Error al actualizar ended_at:', err);
+        console.error('💥 Error updating ended_at:', err);
       }
     }
   };
@@ -341,6 +403,33 @@ const HomeScreen: ScreenComponent = () => {
           <Text style={styles.connectionBannerText}>
             Your PineTime is not connected to your device. Check your Bluetooth configuration.
           </Text>
+        </View>
+      )}
+
+      {isCollecting && (
+        <View style={[styles.connectionBanner, { backgroundColor: connectionStatus === 'connected' ? '#4CAF50' : connectionStatus === 'connecting' ? '#FF9800' : '#F44336' }]}>
+          <Icon 
+            name={connectionStatus === 'connected' ? 'wifi' : connectionStatus === 'connecting' ? 'wifi-off' : 'wifi-off'} 
+            size={25} 
+            color="#fff" 
+          />
+          <View style={{ flex: 1, marginLeft: 10 }}>
+            <Text style={styles.connectionBannerText}>
+              {connectionStatus === 'connected' ? 'Connected - Collecting data' : 
+               connectionStatus === 'connecting' ? 'Connecting...' : 'Connection lost - Attempting to reconnect'}
+            </Text>
+            {collectionStartTime && (
+              <Text style={[styles.connectionBannerText, { fontSize: 12, marginTop: 2 }]}>
+                Started: {format(collectionStartTime, 'HH:mm:ss')} | 
+                Duration: {format(new Date(), 'HH:mm:ss')}
+              </Text>
+            )}
+            {lastDataTimestamp && (
+              <Text style={[styles.connectionBannerText, { fontSize: 12, marginTop: 2 }]}>
+                Last data: {format(lastDataTimestamp, 'HH:mm:ss')}
+              </Text>
+            )}
+          </View>
         </View>
       )}
 

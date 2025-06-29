@@ -96,7 +96,6 @@ const ConfigurationScreen = () => {
       {
         text: 'OK',
         onPress: () => {
-          // Reset authentication to lock the screen again
           setIsAuthenticated(false);
           setPinCode('');
         }

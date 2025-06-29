@@ -152,7 +152,7 @@ const ExportationScreen = () => {
     setAvailableRecordIds(data.map((r: any) => r.id));
     setSelectedRecordId(null); 
   };
-
+  
   const calculateMetrics = async (sleepRecordId: number) => {
     if (isCalculating) return; // Prevent multiple simultaneous calculations
     
@@ -174,7 +174,7 @@ const ExportationScreen = () => {
       }
 
       // Call the backend to calculate metrics
-      const res = await fetch('https://6f52-2a02-3033-680-d6e-19ac-53ab-bd8-afd9.ngrok-free.app/compute', {
+      const res = await fetch('https://6920-2a02-3033-680-52f-b57c-3200-bc46-c0e2.ngrok-free.app/compute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sleep_record_id: sleepRecordId }),

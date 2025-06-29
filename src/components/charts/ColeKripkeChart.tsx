@@ -27,9 +27,13 @@ export const CKClassificationChart = ({ sleepRecordId }: CKClassificationChartPr
 
       if (!data) return;
 
+      console.log('Raw Cole-Kripke data from database:', data);
+
       const sorted = data.sort(
         (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
       );
+
+      console.log('Sorted Cole-Kripke data:', sorted);
 
       const labels = sorted.map((d: any, i: number) =>
         i % Math.ceil(sorted.length / 5) === 0
@@ -38,6 +42,9 @@ export const CKClassificationChart = ({ sleepRecordId }: CKClassificationChartPr
       );
 
       const stateValues = sorted.map((d: any) => parseInt(d.state));
+
+      console.log('Cole-Kripke state values:', stateValues);
+      console.log('Cole-Kripke labels:', labels);
 
       setLabels(labels);
       setStates(stateValues);
