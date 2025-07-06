@@ -70,6 +70,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: SPACING.md,
     gap: SPACING.sm,
+    paddingTop: 40,
   },
   connectionBannerText: {
     color: '#fff',
@@ -93,6 +94,7 @@ const styles = StyleSheet.create({
     marginBottom: 0,
     fontFamily: 'Roboto-Regular',
     color: COLORS.text.primary,
+    marginTop: 20,
   },
   statusContainer: {
     padding: 15,

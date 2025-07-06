@@ -2,7 +2,7 @@
 import React, { createContext, useContext, useState } from 'react';
 
 type Config = {
-  accelFrequency: number; // en segundos
+  accelFrequency: number; // in seconds
   hrFrequency: number;
   setConfig: (config: { accelFrequency?: number; hrFrequency?: number }) => void;
 };

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { COLORS, FONT_SIZE, SPACING } from '../constants/theme';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, startOfWeek, endOfWeek } from 'date-fns';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 interface CalendarProps {
@@ -19,9 +19,14 @@ export const Calendar: React.FC<CalendarProps> = ({
   onDateSelect,
   onMonthChange
 }) => {
+  // Calculate the start and end of the week that contains the first day of the month
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
-  const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
+  const calendarStart = startOfWeek(monthStart, { weekStartsOn: 0 }); // 0 = Sunday
+  const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 0 }); // 0 = Sunday
+  
+  // Get all days for the calendar grid (including days from previous/next month)
+  const days = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
 
   const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -66,7 +71,7 @@ export const Calendar: React.FC<CalendarProps> = ({
           </Text>
         ))}
       </View>
-
+      
       <View style={styles.daysContainer}>
         {days.map((day, index) => {
           const isAvailable = availableDates.some(date => isSameDay(date, day));
@@ -124,27 +129,31 @@ const styles = StyleSheet.create({
   },
   weekDaysContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
     marginBottom: SPACING.sm,
+    paddingHorizontal: 2,
+    width: '100%',
   },
   weekDay: {
     fontSize: FONT_SIZE.xs,
     color: COLORS.text.secondary,
     fontFamily: 'Roboto-Regular',
-    width: 40,
+    flex: 1,
+    height: 40,
     textAlign: 'center',
+    textAlignVertical: 'center',
   },
   daysContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'flex-start',
+    paddingHorizontal: 2,
+    width: '100%',
   },
   dayCell: {
-    width: 40,
+    width: '14.28%', // 100% / 7 = 14.28%
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    margin: 2,
+    margin: 0,
   },
   dayText: {
     fontSize: FONT_SIZE.sm,
@@ -153,7 +162,7 @@ const styles = StyleSheet.create({
   },
   availableDay: {
     backgroundColor: COLORS.background.secondary,
-    borderRadius: 20,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: COLORS.primary,
   },
@@ -162,7 +171,7 @@ const styles = StyleSheet.create({
   },
   selectedDay: {
     backgroundColor: COLORS.primary,
-    borderRadius: 20,
+    borderRadius: 10,
   },
   selectedDayText: {
     color: COLORS.text.light,

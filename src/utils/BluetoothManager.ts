@@ -1,9 +1,9 @@
-// BluetoothManager.ts – versión depurada completa 🔌
+// BluetoothManager.ts 
 // ------------------------------------------------------------------
-//  ▸ Conexión y descubrimiento BLE (ensurePineTime)
-//  ▸ Recolección de datos (startCollection)
-//  ▸ Inserción en Supabase centralizada (saveSensorData)
-//  ▸ Limpieza y keep‑alive integrados
+//  ▸ Connection and discovery (ensurePineTime)
+//  ▸ Data collection (startCollection)
+//  ▸ Centralized Supabase insertion (saveSensorData)
+//  ▸ Integrated cleanup and keep‑alive
 // ------------------------------------------------------------------
 
 import {
