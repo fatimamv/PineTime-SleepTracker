@@ -152,7 +152,7 @@ const ExportationScreen = () => {
     setAvailableRecordIds(data.map((r: any) => r.id));
     setSelectedRecordId(null); 
   };
-
+  
   const calculateMetrics = async (sleepRecordId: number) => {
     if (isCalculating) return; // Prevent multiple simultaneous calculations
     
@@ -174,7 +174,7 @@ const ExportationScreen = () => {
       }
 
       // Call the backend to calculate metrics
-      const res = await fetch('https://6f52-2a02-3033-680-d6e-19ac-53ab-bd8-afd9.ngrok-free.app/compute', {
+      const res = await fetch('https://f962-2a02-3033-680-6f9e-44eb-4012-8709-ebdb.ngrok-free.app/compute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sleep_record_id: sleepRecordId }),
@@ -214,6 +214,32 @@ const ExportationScreen = () => {
     return csvRows.join('\n');
   };
 
+  // Function to convert UTC timestamp to CET/CEST timezone
+  const convertToCET = (utcTimestamp: string) => {
+    console.log('🕐 Converting timestamp:', utcTimestamp);
+    
+    // Ensure the timestamp is treated as UTC
+    let timestamp = utcTimestamp;
+    if (!timestamp.endsWith('Z') && !timestamp.includes('+')) {
+      // If no timezone indicator, assume it's UTC and add Z
+      timestamp = timestamp + 'Z';
+    }
+    
+    const date = new Date(timestamp);
+    console.log('🕐 Original date object:', date);
+    console.log('🕐 Original date ISO:', date.toISOString());
+    
+    // Add 2 hours for CEST (Central European Summer Time)
+    // This handles the current summer time period
+    const cetDate = new Date(date.getTime() + (2 * 60 * 60 * 1000));
+    console.log('🕐 CET date object:', cetDate);
+    console.log('🕐 CET date ISO:', cetDate.toISOString());
+    
+    const result = cetDate.toISOString().replace('Z', '');
+    console.log('🕐 Final result:', result);
+    return result;
+  };
+
   const handleExport = async () => {
     if (!validateDates() || selectedMetrics.length === 0) {
       Alert.alert('Error', 'Please select metrics and a valid date range');
@@ -250,13 +276,17 @@ const ExportationScreen = () => {
           .eq('sensor_type', 'heart_rate');
   
         if (!hrError && hrData) {
-          const processed = hrData.map(d => {
-            const parsed = JSON.parse(d.value);
-            return {
-              time: new Date(d.captured_at).toISOString(),
-              heart_rate: parsed.heartRate,
-            };
-          });
+          const processed = hrData
+            .map(d => {
+              const parsed = JSON.parse(d.value);
+              return {
+                time: convertToCET(d.captured_at),
+                heart_rate: parsed.heartRate,
+                original_timestamp: d.captured_at, // Keep original for sorting
+              };
+            })
+            .sort((a, b) => new Date(a.original_timestamp).getTime() - new Date(b.original_timestamp).getTime()) // Sort chronologically
+            .map(({ original_timestamp, ...rest }) => rest); // Remove original_timestamp from final output
   
           const content = formatData(processed, fileFormat);
           const path = `${zipFolderPath}/heart_rate.${fileFormat}`;
@@ -273,15 +303,19 @@ const ExportationScreen = () => {
           .eq('sensor_type', 'accelerometer');
   
         if (!accError && accData) {
-          const processed = accData.map(d => {
-            const parsed = JSON.parse(d.value);
-            return {
-              time: new Date(d.captured_at).toISOString(),
-              x: parsed.x,
-              y: parsed.y,
-              z: parsed.z,
-            };
-          });
+          const processed = accData
+            .map(d => {
+              const parsed = JSON.parse(d.value);
+              return {
+                time: convertToCET(d.captured_at),
+                x: parsed.x,
+                y: parsed.y,
+                z: parsed.z,
+                original_timestamp: d.captured_at, // Keep original for sorting
+              };
+            })
+            .sort((a, b) => new Date(a.original_timestamp).getTime() - new Date(b.original_timestamp).getTime()) // Sort chronologically
+            .map(({ original_timestamp, ...rest }) => rest); // Remove original_timestamp from final output
   
           const content = formatData(processed, fileFormat);
           const path = `${zipFolderPath}/accelerometer.${fileFormat}`;
@@ -300,7 +334,7 @@ const ExportationScreen = () => {
           const processed = ckData
             .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
             .map(d => ({
-              time: new Date(d.timestamp).toISOString(),
+              time: convertToCET(d.timestamp),
               state: d.state === 0 ? '0 = Sleep' : '1 = Awake',
             }));
       
@@ -320,7 +354,7 @@ const ExportationScreen = () => {
       
         if (!stagesError && stagesData) {
           const processed = stagesData.map(d => ({
-            time: `${new Date(d.start_time).toISOString()} - ${new Date(d.end_time).toISOString()}`,
+            time: `${convertToCET(d.start_time)} - ${convertToCET(d.end_time)}`,
             stage: d.stage,
             duration_min: Math.round((new Date(d.end_time).getTime() - new Date(d.start_time).getTime()) / 1000 / 60),
           }));

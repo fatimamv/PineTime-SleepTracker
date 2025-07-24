@@ -133,7 +133,7 @@ export const StatisticsScreen = () => {
       .eq('sleep_record_id', id)
       .single();
 
-    // Verificar que los campos existan y no sean null
+    // Verify that the fields exist and are not null
     metrics['Sleep Quality'] = Boolean(qualityData && 
       typeof qualityData.waso_minutes === 'number' && 
       typeof qualityData.fragmentation_index === 'number' && 
@@ -224,7 +224,7 @@ export const StatisticsScreen = () => {
       }
 
       // Call the backend to calculate metrics
-      const res = await fetch('https://6f52-2a02-3033-680-d6e-19ac-53ab-bd8-afd9.ngrok-free.app/compute', {
+      const res = await fetch('https://f962-2a02-3033-680-6f9e-44eb-4012-8709-ebdb.ngrok-free.app/compute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sleep_record_id: parseInt(sleepRecordId) }),
@@ -592,7 +592,7 @@ export const StatisticsScreen = () => {
                   const fi = data.fragmentation_index ? data.fragmentation_index * 100 : 0;
 
                   setModalTitle('Sleep Quality Raw Data');
-                  setModalData([]); // No usamos esta tabla, solo extraContent
+                  setModalData([]); 
 
                   setModalExtraContent(
                     <View>
